@@ -1,10 +1,9 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Button } from '@/components/ui/button';
-import { Edit, Trash2, MoreHorizontal, Users2 } from 'lucide-react';
+import { Users2 } from 'lucide-react';
 
-const EmployeeRow = ({ employee, onEdit, onDelete, onActionClick, index }) => (
+const EmployeeRow = ({ employee, index }) => (
   <motion.tr
     key={employee.id}
     initial={{ opacity: 0, x: -20 }}
@@ -35,17 +34,10 @@ const EmployeeRow = ({ employee, onEdit, onDelete, onActionClick, index }) => (
       </span>
     </td>
     <td className="py-3 px-4 text-slate-300">{employee.rank_group || '-'}</td>
-    <td className="py-3 px-4">
-      <div className="flex items-center space-x-1">
-        <Button size="icon" variant="ghost" onClick={() => onEdit(employee)} className="text-slate-400 hover:text-white w-8 h-8"><Edit className="w-4 h-4" /></Button>
-        <Button size="icon" variant="ghost" onClick={() => onDelete(employee.id)} className="text-slate-400 hover:text-red-400 w-8 h-8"><Trash2 className="w-4 h-4" /></Button>
-        <Button size="icon" variant="ghost" onClick={() => onActionClick("Menu Lainnya")} className="text-slate-400 hover:text-white w-8 h-8"><MoreHorizontal className="w-4 h-4" /></Button>
-      </div>
-    </td>
   </motion.tr>
 );
 
-const EmployeeTable = ({ employees, isLoading, searchTerm, onEdit, onDelete, onActionClick }) => {
+const EmployeeTable = ({ employees, isLoading, searchTerm }) => {
   if (isLoading && employees.length === 0) {
     return <div className="text-center py-8 text-slate-300">{searchTerm ? "Mencari..." : "Memuat data pegawai..."}</div>;
   }
@@ -54,7 +46,7 @@ const EmployeeTable = ({ employees, isLoading, searchTerm, onEdit, onDelete, onA
     return (
       <div className="text-center py-8">
         <Users2 className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-        <p className="text-slate-400">{searchTerm ? "Tidak ada pegawai yang cocok dengan pencarian." : "Belum ada data pegawai."}</p>
+        <p className="text-slate-400">{searchTerm ? "Tidak ada pegawai yang cocok dengan pencarian." : "Belum ada data pegawai. Silakan sinkronkan dari SIMPEL."}</p>
       </div>
     );
   }
@@ -70,7 +62,6 @@ const EmployeeTable = ({ employees, isLoading, searchTerm, onEdit, onDelete, onA
             <th className="text-left py-3 px-4 text-slate-300 font-medium">Unit Penempatan</th>
             <th className="text-left py-3 px-4 text-slate-300 font-medium">Status ASN</th>
             <th className="text-left py-3 px-4 text-slate-300 font-medium">Pangkat/Golongan</th>
-            <th className="text-left py-3 px-4 text-slate-300 font-medium">Aksi</th>
           </tr>
         </thead>
         <tbody>
@@ -78,9 +69,6 @@ const EmployeeTable = ({ employees, isLoading, searchTerm, onEdit, onDelete, onA
             <EmployeeRow 
               key={employee.id} 
               employee={employee} 
-              onEdit={onEdit} 
-              onDelete={onDelete} 
-              onActionClick={onActionClick} 
               index={index}
             />
           ))}

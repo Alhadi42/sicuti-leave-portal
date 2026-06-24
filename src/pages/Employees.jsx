@@ -1,42 +1,25 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import {
   Search,
-  Plus,
   Download,
-  Upload,
   RefreshCw,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight
+  Info
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/supabaseClient';
-import ImportEmployeeDialog from '@/components/employees/ImportEmployeeDialog';
-import EmployeeForm from '@/components/employees/EmployeeForm';
 import EmployeeTable from '@/components/employees/EmployeeTable';
 import { useEmployeeData } from '@/hooks/useEmployeeData';
-import { Combobox } from '@/components/ui/combobox';
 import { Label } from '@/components/ui/label';
 import { exportEmployeesToExcel } from '@/utils/excelUtils';
 import { AuthManager } from '@/lib/auth';
@@ -72,9 +55,6 @@ const Employees = () => {
     currentPage
   );
 
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
   const currentUser = AuthManager.getUserSession();
@@ -88,14 +68,30 @@ const Employees = () => {
     });
 
     try {
-      // 1. Ambil data pegawai dari SIMPEL
-      const { data: simpelEmployees, error: fetchErr } = await supabaseSimpelAdmin
-        .from("employees")
-        .select("*");
+      // 1. Ambil SEMUA data pegawai dari SIMPEL (pagination untuk mengatasi limit Supabase)
+      let allSimpelEmployees = [];
+      let from = 0;
+      const pageSize = 1000;
+      let hasMore = true;
 
-      if (fetchErr) throw fetchErr;
+      while (hasMore) {
+        const { data: batch, error: fetchErr } = await supabaseSimpelAdmin
+          .from("employees")
+          .select("*")
+          .range(from, from + pageSize - 1);
 
-      if (!simpelEmployees || simpelEmployees.length === 0) {
+        if (fetchErr) throw fetchErr;
+
+        if (batch && batch.length > 0) {
+          allSimpelEmployees = allSimpelEmployees.concat(batch);
+          from += pageSize;
+          hasMore = batch.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      if (allSimpelEmployees.length === 0) {
         toast({
           variant: "destructive",
           title: "❌ Gagal Sinkronisasi",
@@ -107,43 +103,123 @@ const Employees = () => {
 
       toast({
         title: "🔄 Memproses Data...",
-        description: `Ditemukan ${simpelEmployees.length} pegawai. Memulai upsert ke database SiCuti.`,
+        description: `Ditemukan ${allSimpelEmployees.length} pegawai dari SIMPEL. Memulai deduplikasi & upsert.`,
       });
 
-      // 2. Format data sesuai dengan kolom SiCuti
-      const formattedEmployees = simpelEmployees.map(emp => ({
-        id: emp.id,
-        nip: emp.nip,
+      // 2. Deduplikasi berdasarkan NIP (jika ada NIP ganda di SIMPEL, ambil yang terbaru)
+      const nipMap = new Map();
+      let duplicateCount = 0;
+      let skippedNoNip = 0;
+
+      for (const emp of allSimpelEmployees) {
+        const nip = emp.nip ? String(emp.nip).trim() : null;
+        
+        // Skip pegawai tanpa NIP
+        if (!nip || nip === '' || nip === 'null') {
+          skippedNoNip++;
+          continue;
+        }
+
+        if (nipMap.has(nip)) {
+          duplicateCount++;
+          // Simpan yang terbaru (berdasarkan updated_at atau created_at)
+          const existing = nipMap.get(nip);
+          const existingDate = new Date(existing.updated_at || existing.created_at || 0);
+          const currentDate = new Date(emp.updated_at || emp.created_at || 0);
+          if (currentDate > existingDate) {
+            nipMap.set(nip, emp);
+          }
+        } else {
+          nipMap.set(nip, emp);
+        }
+      }
+
+      console.log(`[Sync] Total SIMPEL: ${allSimpelEmployees.length}, Unik NIP: ${nipMap.size}, Duplikat: ${duplicateCount}, Tanpa NIP: ${skippedNoNip}`);
+
+      // 3. Format data sesuai kolom SiCuti — JANGAN salin 'id' dari SIMPEL!
+      //    Biarkan SiCuti menggunakan ID-nya sendiri. NIP adalah penghubung utama.
+      const formattedEmployees = Array.from(nipMap.values()).map(emp => ({
+        nip: String(emp.nip).trim(),
         name: emp.name,
-        old_position: emp.old_position,
-        department: emp.department,
-        join_date: emp.join_date,
-        position_type: emp.position_type,
-        position_name: emp.position_name,
-        asn_status: emp.asn_status,
-        rank_group: emp.rank_group,
+        old_position: emp.old_position || null,
+        department: emp.department || null,
+        join_date: emp.join_date || null,
+        position_type: emp.position_type || null,
+        position_name: emp.position_name || null,
+        asn_status: emp.asn_status || null,
+        rank_group: emp.rank_group || null,
         updated_at: new Date().toISOString()
       }));
 
-      // 3. Masukkan secara bertahap (chunking) per 100 record agar tidak overload
-      const chunkSize = 100;
+      // 4. Upsert secara bertahap (chunking) per 50 record, menggunakan NIP sebagai conflict key
+      const chunkSize = 50;
+      let successCount = 0;
+      let errorCount = 0;
+      const errorDetails = [];
+
       for (let i = 0; i < formattedEmployees.length; i += chunkSize) {
         const chunk = formattedEmployees.slice(i, i + chunkSize);
-        const { error: upsertErr } = await supabase
-          .from("employees")
-          .upsert(chunk, { onConflict: 'id' });
+        
+        try {
+          const { error: upsertErr } = await supabase
+            .from("employees")
+            .upsert(chunk, { 
+              onConflict: 'nip',
+              ignoreDuplicates: false  // Update existing records
+            });
 
-        if (upsertErr) throw upsertErr;
+          if (upsertErr) {
+            console.error(`[Sync] Chunk ${Math.floor(i/chunkSize)+1} error:`, upsertErr.message);
+            errorCount += chunk.length;
+            errorDetails.push(upsertErr.message);
+          } else {
+            successCount += chunk.length;
+          }
+        } catch (chunkErr) {
+          console.error(`[Sync] Chunk ${Math.floor(i/chunkSize)+1} exception:`, chunkErr);
+          errorCount += chunk.length;
+          errorDetails.push(chunkErr.message);
+        }
+
+        // Progress toast setiap 5 chunk
+        if ((i / chunkSize) % 5 === 4) {
+          toast({
+            title: "🔄 Progres Sinkronisasi...",
+            description: `${successCount} dari ${formattedEmployees.length} pegawai telah diproses.`,
+          });
+        }
       }
 
+      console.log(`[Sync] Upsert selesai: ${successCount} sukses, ${errorCount} gagal`);
+
+      // 5. Inisialisasi saldo cuti tahun berjalan
       toast({
-        title: "✅ Sinkronisasi Berhasil",
-        description: `Berhasil menyinkronkan ${formattedEmployees.length} data pegawai dari SIMPEL ke SiCuti.`,
+        title: "🔄 Menginisialisasi Saldo Cuti...",
+        description: "Menyiapkan kuota saldo cuti tahun berjalan untuk pegawai baru.",
       });
+
+      const currentYear = new Date().getFullYear();
+      const { initializeYearBalances } = await import('@/utils/leaveBalanceCalculator');
+      const initResult = await initializeYearBalances(supabase, currentYear);
+      console.log(`[Sync] Initialized balances: ${initResult.initialized} records, errors: ${initResult.errors?.length || 0}`);
+
+      // 6. Tampilkan hasil akhir
+      if (errorCount === 0) {
+        toast({
+          title: "✅ Sinkronisasi Berhasil",
+          description: `${successCount} pegawai berhasil disinkronkan dari SIMPEL ke SiCuti.${duplicateCount > 0 ? ` (${duplicateCount} NIP duplikat di-skip)` : ''}${skippedNoNip > 0 ? ` (${skippedNoNip} tanpa NIP di-skip)` : ''}`,
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "⚠️ Sinkronisasi Sebagian",
+          description: `${successCount} sukses, ${errorCount} gagal. Error: ${errorDetails[0]}`,
+        });
+      }
       
       handleRefreshData();
     } catch (error) {
-      console.error("Sync error:", error);
+      console.error("[Sync] Fatal error:", error);
       toast({
         variant: "destructive",
         title: "❌ Gagal Sinkronisasi",
@@ -186,12 +262,7 @@ const Employees = () => {
     setCurrentPage(1);
   };
 
-  const handleFeatureClick = (feature) => {
-    toast({
-      title: `🚀 ${feature}`,
-      description: "🚧 Fitur ini belum diimplementasikan—tapi jangan khawatir! Anda bisa memintanya di prompt berikutnya! 🚀",
-    });
-  };
+
 
   const handleExportData = async () => {
     try {
@@ -272,33 +343,7 @@ const Employees = () => {
     }
   };
 
-  const onImportSuccess = useCallback(() => {
-    handleRefreshData();
-  }, [refreshData]);
 
-  const onFormSubmitSuccess = () => {
-    setIsFormModalOpen(false);
-    setEditingEmployee(null);
-    handleRefreshData();
-  };
-
-  const handleEditEmployee = (employee) => {
-    setEditingEmployee(employee);
-    setIsFormModalOpen(true);
-  };
-
-  const handleDeleteEmployee = async (employeeId) => {
-    if (!window.confirm("Apakah Anda yakin ingin menghapus pegawai ini? Data terkait seperti riwayat cuti juga akan terpengaruh.")) return;
-
-    try {
-      const { error } = await supabase.from('employees').delete().eq('id', employeeId);
-      if (error) throw error;
-      toast({ title: "✅ Pegawai Dihapus", description: "Data pegawai berhasil dihapus." });
-      handleRefreshData();
-    } catch (error) {
-      toast({ variant: "destructive", title: "❌ Gagal Menghapus Pegawai", description: error.message });
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -311,7 +356,11 @@ const Employees = () => {
       >
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Data Pegawai</h1>
-          <p className="text-slate-300">Kelola data {overallTotalEmployeeCount} pegawai dan informasi cuti</p>
+          <p className="text-slate-300">Data {overallTotalEmployeeCount} pegawai — tersinkronisasi otomatis dari SIMPEL</p>
+          <div className="flex items-center gap-2 mt-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-lg w-fit">
+            <Info className="w-4 h-4 text-blue-400 flex-shrink-0" />
+            <span className="text-xs text-blue-300">Data pegawai bersifat <strong>read-only</strong>. Untuk menambah atau mengubah data, silakan gunakan aplikasi <strong>SIMPEL</strong>.</span>
+          </div>
         </div>
         <div className="flex space-x-2 mt-4 sm:mt-0">
           {isMasterAdmin && (
@@ -324,10 +373,6 @@ const Employees = () => {
               {isSyncing ? 'Sinkronisasi...' : 'Sync dari SIMPEL'}
             </Button>
           )}
-          <Button onClick={() => setIsFormModalOpen(true)} className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700">
-            <Plus className="w-4 h-4 mr-2" />
-            Tambah Pegawai
-          </Button>
         </div>
       </motion.div>
 
@@ -352,14 +397,6 @@ const Employees = () => {
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsImportModalOpen(true)}
-                  className="border-slate-600 text-slate-300 hover:text-white"
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  Import
-                </Button>
                 <Button
                   variant="outline"
                   onClick={handleExportData}
@@ -435,46 +472,15 @@ const Employees = () => {
                 </Select>
               </div>
             </div>
-            {/* Employee Table */}
+            {/* Employee Table (Read-Only) */}
             <EmployeeTable
               employees={displayedEmployees}
               isLoading={isLoading}
-              onEdit={handleEditEmployee}
-              onDelete={handleDeleteEmployee}
               isSearchActive={!!debouncedSearchTerm || !!selectedUnitPenempatan || !!selectedPositionType || !!selectedAsnStatus || !!selectedRankGroup}
             />
           </div>
         </CardContent>
       </Card>
-
-      {/* Import Modal */}
-      <ImportEmployeeDialog
-        isOpen={isImportModalOpen}
-        onOpenChange={setIsImportModalOpen}
-        onImportSuccess={onImportSuccess}
-      />
-
-      {/* Form Modal */}
-      <Dialog open={isFormModalOpen} onOpenChange={setIsFormModalOpen}>
-        <DialogContent className="sm:max-w-[600px] bg-slate-800 text-slate-300 border-slate-700">
-          <DialogHeader>
-            <DialogTitle className="text-white">{editingEmployee ? 'Edit Pegawai' : 'Tambah Pegawai'}</DialogTitle>
-            <DialogDescription className="text-slate-400">
-              {editingEmployee ? 'Update informasi pegawai yang sudah ada' : 'Tambahkan data pegawai baru ke sistem'}
-            </DialogDescription>
-          </DialogHeader>
-          <EmployeeForm
-            employee={editingEmployee}
-            onFormSubmit={onFormSubmitSuccess}
-            onCancel={() => setIsFormModalOpen(false)}
-            departments={unitPenempatanOptions || []}
-            positionTypes={positionTypes || []}
-            asnStatuses={asnStatuses || []}
-            rankGroups={rankGroups || []}
-            isLoadingDepartments={isLoading}
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

@@ -3,3 +3,5 @@ node_modules
 **/tempobook/storyboards/
 .env
 **/tempobook/**
+scripts/
+scratch/
