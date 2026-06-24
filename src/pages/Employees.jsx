@@ -40,6 +40,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { Label } from '@/components/ui/label';
 import { exportEmployeesToExcel } from '@/utils/excelUtils';
 import { AuthManager } from '@/lib/auth';
+import { supabaseSimpelAdmin } from '@/lib/supabaseSSO';
 
 const Employees = () => {
   const { toast } = useToast();
@@ -74,6 +75,84 @@ const Employees = () => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const currentUser = AuthManager.getUserSession();
+  const isMasterAdmin = currentUser?.role === 'master_admin';
+
+  const handleSyncFromSimpel = async () => {
+    setIsSyncing(true);
+    toast({
+      title: "⏳ Memulai Sinkronisasi...",
+      description: "Menghubungkan ke database SIMPEL untuk mengambil data pegawai.",
+    });
+
+    try {
+      // 1. Ambil data pegawai dari SIMPEL
+      const { data: simpelEmployees, error: fetchErr } = await supabaseSimpelAdmin
+        .from("employees")
+        .select("*");
+
+      if (fetchErr) throw fetchErr;
+
+      if (!simpelEmployees || simpelEmployees.length === 0) {
+        toast({
+          variant: "destructive",
+          title: "❌ Gagal Sinkronisasi",
+          description: "Tidak ada data pegawai yang ditemukan di aplikasi SIMPEL.",
+        });
+        setIsSyncing(false);
+        return;
+      }
+
+      toast({
+        title: "🔄 Memproses Data...",
+        description: `Ditemukan ${simpelEmployees.length} pegawai. Memulai upsert ke database SiCuti.`,
+      });
+
+      // 2. Format data sesuai dengan kolom SiCuti
+      const formattedEmployees = simpelEmployees.map(emp => ({
+        id: emp.id,
+        nip: emp.nip,
+        name: emp.name,
+        old_position: emp.old_position,
+        department: emp.department,
+        join_date: emp.join_date,
+        position_type: emp.position_type,
+        position_name: emp.position_name,
+        asn_status: emp.asn_status,
+        rank_group: emp.rank_group,
+        updated_at: new Date().toISOString()
+      }));
+
+      // 3. Masukkan secara bertahap (chunking) per 100 record agar tidak overload
+      const chunkSize = 100;
+      for (let i = 0; i < formattedEmployees.length; i += chunkSize) {
+        const chunk = formattedEmployees.slice(i, i + chunkSize);
+        const { error: upsertErr } = await supabase
+          .from("employees")
+          .upsert(chunk, { onConflict: 'id' });
+
+        if (upsertErr) throw upsertErr;
+      }
+
+      toast({
+        title: "✅ Sinkronisasi Berhasil",
+        description: `Berhasil menyinkronkan ${formattedEmployees.length} data pegawai dari SIMPEL ke SiCuti.`,
+      });
+      
+      handleRefreshData();
+    } catch (error) {
+      console.error("Sync error:", error);
+      toast({
+        variant: "destructive",
+        title: "❌ Gagal Sinkronisasi",
+        description: error.message || "Terjadi kesalahan saat menyinkronkan data pegawai.",
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   useEffect(() => {
     const timerId = setTimeout(() => {
@@ -235,6 +314,16 @@ const Employees = () => {
           <p className="text-slate-300">Kelola data {overallTotalEmployeeCount} pegawai dan informasi cuti</p>
         </div>
         <div className="flex space-x-2 mt-4 sm:mt-0">
+          {isMasterAdmin && (
+            <Button 
+              onClick={handleSyncFromSimpel} 
+              disabled={isSyncing}
+              className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSyncing ? 'Sinkronisasi...' : 'Sync dari SIMPEL'}
+            </Button>
+          )}
           <Button onClick={() => setIsFormModalOpen(true)} className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700">
             <Plus className="w-4 h-4 mr-2" />
             Tambah Pegawai

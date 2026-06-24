@@ -8,8 +8,8 @@ import {
 
 import { Toaster } from "@/components/ui/toaster";
 import Layout from "@/components/Layout";
-import Login from "@/pages/Login";
 import Landing from "@/pages/Landing";
+import AuthCallback from "@/pages/AuthCallback";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ConnectionHealthChecker from "@/components/ConnectionHealthChecker";
@@ -47,7 +47,7 @@ function App() {
             <Routes>
               {/* Public routes - no layout */}
               <Route path="/" element={<Landing />} />
-              <Route path="/login" element={<Login />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
 
               {/* Protected routes - with layout */}
               <Route

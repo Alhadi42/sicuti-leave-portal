@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -14,7 +14,7 @@ import {
   Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { AuthManager } from "@/lib/auth";
+import { signOut, getAuthUser } from "@/lib/supabaseSSO";
 import PwaInstallPrompt from "@/components/PwaInstallPrompt";
 
 const menuItems = [
@@ -79,11 +79,24 @@ const getMenuItemsByPermissions = (permissions = [], user) => {
 
 const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
   const location = useLocation();
-  const user = AuthManager.getUserSession();
+  const [user, setUser] = useState(null);
 
-  const handleLogout = () => {
-    AuthManager.logout();
-    window.location.href = "/login";
+  useEffect(() => {
+    const loadUser = async () => {
+      const authUser = await getAuthUser();
+      if (authUser) {
+        setUser({
+          name: authUser.email?.split('@')[0] || 'User',
+          role: 'user',
+          permissions: ['all'],
+        });
+      }
+    };
+    loadUser();
+  }, []);
+
+  const handleLogout = async () => {
+    await signOut();
   };
 
   const handleItemClick = () => {

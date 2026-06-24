@@ -1,20 +1,34 @@
-import React from "react";
-import { Navigate } from "react-router-dom";
-import { AuthManager } from "@/lib/auth";
+import React, { useEffect, useState } from "react";
+import { redirectToSimpelLogin, getAuthSession } from "@/lib/supabaseSSO";
 
 const ProtectedRoute = ({ children, requiredRole = null }) => {
-  const isAuthenticated = AuthManager.isAuthenticated();
+  const [isAuthenticated, setIsAuthenticated] = useState(null); // null = loading
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+  useEffect(() => {
+    const checkAuth = async () => {
+      const session = await getAuthSession();
+      setIsAuthenticated(!!session);
+    };
+    checkAuth();
+  }, []);
+
+  // Tampilkan loading spinner sementara cek sesi
+  if (isAuthenticated === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+        <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
-  // Check role-based access if required
-  if (requiredRole && !AuthManager.hasRole(requiredRole)) {
-    return <Navigate to="/employees" replace />;
+  // Jika belum login → redirect ke SIMPEL
+  if (!isAuthenticated) {
+    redirectToSimpelLogin();
+    return null;
   }
 
   return children;
 };
 
 export default ProtectedRoute;
+

@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { AuthManager } from "@/lib/auth";
+import { redirectToSimpelLogin, getAuthSession } from "@/lib/supabaseSSO";
 import {
   CalendarCheck,
   ShieldCheck,
@@ -13,14 +13,34 @@ import {
   Sparkles,
 } from "lucide-react";
 
+import { useToast } from "@/components/ui/use-toast";
+
 export default function Landing() {
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   useEffect(() => {
-    if (AuthManager.isAuthenticated()) {
-      navigate("/employees", { replace: true });
+    // Cek error dari query parameter (seperti user_not_found dari AuthCallback)
+    const params = new URLSearchParams(window.location.search);
+    const errorParam = params.get("error");
+    if (errorParam === "user_not_found") {
+      toast({
+        variant: "destructive",
+        title: "Login SSO Gagal",
+        description: "Akun SIMPEL Anda berhasil divalidasi, tetapi email Anda belum terdaftar di aplikasi SiCuti. Silakan hubungi administrator.",
+      });
+      // Bersihkan URL query param tanpa reload page
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
-  }, [navigate]);
+
+    const checkSession = async () => {
+      const session = await getAuthSession();
+      if (session) {
+        navigate("/employees", { replace: true });
+      }
+    };
+    checkSession();
+  }, [navigate, toast]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -59,19 +79,19 @@ function Header() {
           <a href="#jenis-cuti" className="transition-colors hover:text-white">Jenis Cuti</a>
         </nav>
         <div className="flex items-center gap-2">
-          <Link
-            to="/login"
-            className="hidden rounded-md px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-white sm:inline-flex"
+          <button
+            onClick={redirectToSimpelLogin}
+            className="hidden rounded-md px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-white sm:inline-flex cursor-pointer"
           >
             Masuk
-          </Link>
-          <Link
-            to="/login"
-            className="inline-flex items-center gap-1.5 rounded-md bg-gradient-to-r from-blue-500 to-purple-600 px-4 py-2 text-sm font-medium text-white shadow-soft transition-all hover:opacity-90"
+          </button>
+          <button
+            onClick={redirectToSimpelLogin}
+            className="inline-flex items-center gap-1.5 rounded-md bg-gradient-to-r from-blue-500 to-purple-600 px-4 py-2 text-sm font-medium text-white shadow-soft transition-all hover:opacity-90 cursor-pointer"
           >
             Ajukan Cuti
             <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
+          </button>
         </div>
       </div>
     </header>
@@ -103,13 +123,13 @@ function Hero() {
           </p>
 
           <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link
-              to="/login"
-              className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:opacity-90"
+            <button
+              onClick={redirectToSimpelLogin}
+              className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:opacity-90 cursor-pointer"
             >
               Mulai Ajukan Cuti
               <ArrowRight className="h-4 w-4" />
-            </Link>
+            </button>
             <a
               href="#cara-kerja"
               className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-700"
@@ -355,13 +375,13 @@ function CutiTypes() {
             Sistem otomatis mengenali hak cuti Anda berdasarkan masa kerja dan jenis cuti yang dipilih,
             sesuai ketentuan peraturan perundang-undangan.
           </p>
-          <Link
-            to="/login"
-            className="mt-8 inline-flex items-center gap-2 rounded-lg bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white border border-slate-700 transition-colors hover:bg-slate-700"
+          <button
+            onClick={redirectToSimpelLogin}
+            className="mt-8 inline-flex items-center gap-2 rounded-lg bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white border border-slate-700 transition-colors hover:bg-slate-700 cursor-pointer"
           >
             Mulai Pengajuan
             <ArrowRight className="h-4 w-4" />
-          </Link>
+          </button>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           {types.map((t) => (
@@ -406,13 +426,13 @@ function CTA() {
             pendampingan teknis, dan migrasi data ditangani oleh tim kami.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Link
-              to="/login"
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-yellow-500 px-6 py-3 text-sm font-semibold text-slate-900 transition-transform hover:-translate-y-0.5"
+            <button
+              onClick={redirectToSimpelLogin}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-yellow-500 px-6 py-3 text-sm font-semibold text-slate-900 transition-transform hover:-translate-y-0.5 cursor-pointer"
             >
-              Login Aplikasi
+              Login via SIMPEL
               <ArrowRight className="h-4 w-4" />
-            </Link>
+            </button>
             <a
               href="#"
               className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/30 bg-white/5 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10"
