@@ -2,6 +2,9 @@ node_modules
 **/tempobook/dynamic/
 **/tempobook/storyboards/
 .env
+.env.local
+.env.production
+.env.development
 **/tempobook/**
 scripts/
 scratch/
