@@ -7,10 +7,39 @@ import { createClient } from "@supabase/supabase-js";
  * supabaseData  → Supabase SiCuti (untuk query data cuti, pakai service_role)
  */
 
+// Validasi environment variables
+const validateEnv = () => {
+  const required = {
+    VITE_SIMPEL_URL: import.meta.env.VITE_SIMPEL_URL,
+    VITE_SIMPEL_ANON_KEY: import.meta.env.VITE_SIMPEL_ANON_KEY,
+    VITE_SIMPEL_SERVICE_ROLE_KEY: import.meta.env.VITE_SIMPEL_SERVICE_ROLE_KEY,
+    VITE_SIMPEL_APP_URL: import.meta.env.VITE_SIMPEL_APP_URL,
+    VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
+    VITE_SUPABASE_SERVICE_ROLE_KEY: import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY,
+  };
+
+  const missing = Object.entries(required)
+    .filter(([key, value]) => !value)
+    .map(([key]) => key);
+
+  if (missing.length > 0) {
+    console.error("[SSO Config] ❌ Environment variables yang hilang:", missing);
+    console.error("[SSO Config] Aplikasi mungkin tidak berfungsi dengan baik!");
+    console.error("[SSO Config] Pastikan semua variable sudah dikonfigurasi di Vercel/Environment");
+  } else {
+    console.log("[SSO Config] ✅ Semua environment variables terdeteksi");
+  }
+
+  return missing.length === 0;
+};
+
+// Jalankan validasi saat module di-load
+const isConfigValid = validateEnv();
+
 // Client untuk AUTH - terhubung ke project SIMPEL
 export const supabaseAuth = createClient(
-  import.meta.env.VITE_SIMPEL_URL,
-  import.meta.env.VITE_SIMPEL_ANON_KEY,
+  import.meta.env.VITE_SIMPEL_URL || "https://placeholder.supabase.co",
+  import.meta.env.VITE_SIMPEL_ANON_KEY || "placeholder",
   {
     auth: {
       persistSession: true,
@@ -23,8 +52,8 @@ export const supabaseAuth = createClient(
 
 // Client untuk DATA - terhubung ke project SiCuti (service_role bypass RLS)
 export const supabaseData = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY,
+  import.meta.env.VITE_SUPABASE_URL || "https://placeholder.supabase.co",
+  import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || "placeholder",
   {
     auth: {
       persistSession: false,
@@ -35,8 +64,8 @@ export const supabaseData = createClient(
 
 // Client admin untuk SIMPEL (service_role) untuk sinkronisasi data pegawai & user profiles
 export const supabaseSimpelAdmin = createClient(
-  import.meta.env.VITE_SIMPEL_URL,
-  import.meta.env.VITE_SIMPEL_SERVICE_ROLE_KEY,
+  import.meta.env.VITE_SIMPEL_URL || "https://placeholder.supabase.co",
+  import.meta.env.VITE_SIMPEL_SERVICE_ROLE_KEY || "placeholder",
   {
     auth: {
       persistSession: false,
@@ -50,9 +79,32 @@ export const supabaseSimpelAdmin = createClient(
  * Setelah login, SIMPEL akan kirim token ke /auth/callback SiCuti
  */
 export const redirectToSimpelLogin = () => {
-  const simpelAppUrl = import.meta.env.VITE_SIMPEL_APP_URL || "http://localhost:5173";
+  const simpelAppUrl = import.meta.env.VITE_SIMPEL_APP_URL;
+  
+  // Validasi: VITE_SIMPEL_APP_URL wajib ada
+  if (!simpelAppUrl) {
+    console.error("[SSO] VITE_SIMPEL_APP_URL tidak dikonfigurasi!");
+    console.error("[SSO] Environment variables yang tersedia:", {
+      VITE_SIMPEL_URL: import.meta.env.VITE_SIMPEL_URL ? "✓ Ada" : "✗ Tidak ada",
+      VITE_SIMPEL_ANON_KEY: import.meta.env.VITE_SIMPEL_ANON_KEY ? "✓ Ada" : "✗ Tidak ada",
+      VITE_SIMPEL_APP_URL: import.meta.env.VITE_SIMPEL_APP_URL ? "✓ Ada" : "✗ Tidak ada",
+      VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL ? "✓ Ada" : "✗ Tidak ada",
+    });
+    
+    alert(
+      "Konfigurasi SSO belum lengkap.\n\n" +
+      "VITE_SIMPEL_APP_URL tidak ditemukan.\n" +
+      "Silakan hubungi administrator untuk mengonfigurasi environment variables."
+    );
+    return;
+  }
+  
   const sicutiCallbackUrl = `${window.location.origin}/auth/callback`;
   const redirectUrl = `${simpelAppUrl}/auth?redirect=${encodeURIComponent(sicutiCallbackUrl)}`;
+  
+  console.log("[SSO] Redirect ke SIMPEL:", redirectUrl);
+  console.log("[SSO] Callback URL:", sicutiCallbackUrl);
+  
   window.location.href = redirectUrl;
 };
 
@@ -80,4 +132,25 @@ export const getAuthUser = async () => {
 export const signOut = async () => {
   await supabaseAuth.auth.signOut();
   window.location.href = "/";
+};
+
+/**
+ * Check apakah konfigurasi SSO sudah lengkap
+ */
+export const isSSOConfigured = () => {
+  return isConfigValid;
+};
+
+/**
+ * Get status konfigurasi environment variables
+ */
+export const getConfigStatus = () => {
+  return {
+    VITE_SIMPEL_URL: !!import.meta.env.VITE_SIMPEL_URL,
+    VITE_SIMPEL_ANON_KEY: !!import.meta.env.VITE_SIMPEL_ANON_KEY,
+    VITE_SIMPEL_SERVICE_ROLE_KEY: !!import.meta.env.VITE_SIMPEL_SERVICE_ROLE_KEY,
+    VITE_SIMPEL_APP_URL: !!import.meta.env.VITE_SIMPEL_APP_URL,
+    VITE_SUPABASE_URL: !!import.meta.env.VITE_SUPABASE_URL,
+    VITE_SUPABASE_SERVICE_ROLE_KEY: !!import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY,
+  };
 };

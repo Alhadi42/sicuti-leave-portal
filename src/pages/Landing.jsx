@@ -1,6 +1,6 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { redirectToSimpelLogin, getAuthSession } from "@/lib/supabaseSSO";
+import { redirectToSimpelLogin, getAuthSession, isSSOConfigured, getConfigStatus } from "@/lib/supabaseSSO";
 import {
   CalendarCheck,
   ShieldCheck,
@@ -11,6 +11,7 @@ import {
   ArrowRight,
   CheckCircle2,
   Sparkles,
+  AlertTriangle,
 } from "lucide-react";
 
 import { useToast } from "@/components/ui/use-toast";
@@ -18,8 +19,16 @@ import { useToast } from "@/components/ui/use-toast";
 export default function Landing() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [showConfigWarning, setShowConfigWarning] = useState(false);
 
   useEffect(() => {
+    // Cek konfigurasi SSO
+    if (!isSSOConfigured()) {
+      setShowConfigWarning(true);
+      const configStatus = getConfigStatus();
+      console.error("[Landing] Konfigurasi SSO tidak lengkap:", configStatus);
+    }
+
     // Cek error dari query parameter (seperti user_not_found dari AuthCallback)
     const params = new URLSearchParams(window.location.search);
     const errorParam = params.get("error");
@@ -44,6 +53,7 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {showConfigWarning && <ConfigWarningBanner />}
       <Header />
       <main>
         <Hero />
@@ -54,6 +64,39 @@ export default function Landing() {
         <CTA />
       </main>
       <Footer />
+    </div>
+  );
+}
+
+function ConfigWarningBanner() {
+  const configStatus = getConfigStatus();
+  const missing = Object.entries(configStatus)
+    .filter(([key, value]) => !value)
+    .map(([key]) => key);
+
+  return (
+    <div className="bg-yellow-900/20 border-b border-yellow-700/50">
+      <div className="mx-auto max-w-6xl px-6 py-3">
+        <div className="flex items-center gap-3 text-sm">
+          <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-yellow-200 font-medium">
+              ⚠️ Konfigurasi SSO Tidak Lengkap
+            </p>
+            <p className="text-yellow-300/80 text-xs mt-0.5">
+              Environment variables yang hilang: {missing.join(", ")}
+            </p>
+          </div>
+          <a
+            href="https://github.com/HRMLavotas/sicuti-leave-portal/blob/main/VERCEL_SETUP_CEPAT.md"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-yellow-200 hover:text-yellow-100 underline whitespace-nowrap"
+          >
+            Panduan Setup
+          </a>
+        </div>
+      </div>
     </div>
   );
 }
