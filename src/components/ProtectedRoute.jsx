@@ -1,9 +1,13 @@
 ﻿import React, { useEffect, useState } from "react";
 import { redirectToSimpelLogin } from "@/lib/supabaseSSO";
 import { AuthManager } from "@/lib/auth";
+import { supabase } from "@/lib/supabaseClient";
 
 /**
  * ProtectedRoute — cek Supabase Auth session (RLS-aware)
+ *
+ * Sumber kebenaran: supabase.auth.getSession()
+ * localStorage hanya cache tambahan, bukan penentu autentikasi.
  */
 const ProtectedRoute = ({ children }) => {
   const [status, setStatus] = useState("loading");
@@ -12,11 +16,17 @@ const ProtectedRoute = ({ children }) => {
     let cancelled = false;
 
     const checkAuth = async () => {
-      await AuthManager.refreshUserSession();
+      // Cek Supabase Auth session sebagai sumber kebenaran
+      const { data: { session } } = await supabase.auth.getSession();
 
       if (cancelled) return;
 
-      if (AuthManager.isAuthenticated()) {
+      if (session?.user) {
+        // Sinkronkan localStorage cache dari session
+        const user = AuthManager.mapUserFromSession(session);
+        if (user) {
+          localStorage.setItem("user_data", JSON.stringify(user));
+        }
         setStatus("authenticated");
       } else {
         setStatus("redirecting");
