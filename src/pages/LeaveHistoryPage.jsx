@@ -29,6 +29,10 @@ import LeaveHistoryFilters from "@/components/leave_history/LeaveHistoryFilters"
 import { exportToExcelWithMultipleSheets } from "@/utils/excelUtils";
 import { calculateLeaveBalance, ensureLeaveBalance } from "@/utils/leaveBalanceCalculator";
 import { useLeaveBalanceYear } from "@/hooks/useLeaveBalanceYear";
+import {
+  resolveSicutiEmployeeIds,
+  attachSicutiEmployeeIds,
+} from "@/utils/sicutiEmployeeResolver";
 
 const STATIC_LEAVE_TYPES_CONFIG = {
   "Cuti Tahunan": {
@@ -251,8 +255,19 @@ const LeaveHistoryPage = () => {
           return;
         }
 
-        // Get employee IDs for fetching related data
-        const employeeIds = employeesData.map((emp) => emp.id);
+        // Map SIMPEL pegawai → ID lokal SiCuti (NIP sebagai penghubung).
+        // leave_balances / leave_requests di DB SiCuti mereferensi employees lokal, bukan SIMPEL.
+        const nipToLocalId = await resolveSicutiEmployeeIds(employeesData);
+        const resolvedEmployees = attachSicutiEmployeeIds(employeesData, nipToLocalId);
+
+        if (resolvedEmployees.length === 0) {
+          setEmployeesWithBalances([]);
+          setIsLoadingData(false);
+          return;
+        }
+
+        // Get employee IDs for fetching related data (SiCuti local IDs)
+        const employeeIds = resolvedEmployees.map((emp) => emp.id);
         const year = parseInt(selectedYear);
         const previousYear = year - 1;
 
@@ -296,7 +311,7 @@ const LeaveHistoryPage = () => {
         );
 
         const missingBalances = [];
-        for (const emp of employeesData) {
+        for (const emp of resolvedEmployees) {
           for (const leaveType of leaveTypes) {
             const key = `${emp.id}-${leaveType.id}`;
             if (!existingBalanceKeys.has(key)) {
@@ -379,7 +394,7 @@ const LeaveHistoryPage = () => {
         });
 
         // Process employee data with their leave balances
-        const processedData = employeesData.map((emp) => {
+        const processedData = resolvedEmployees.map((emp) => {
           // Optimize: Use maps for O(1) lookups
           const empBalances = balancesByEmployeeMap.get(emp.id) || [];
           const empLeaveRequests = requestsByEmployeeMap.get(emp.id) || [];
