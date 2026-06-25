@@ -40,21 +40,15 @@ export class AuthManager {
     if (error) throw error;
   }
 
-  /**
-   * Simpan sesi SSO SIMPEL ke localStorage (SiCuti tidak memakai Supabase Auth untuk SSO).
-   */
-  static setSsoSession(user) {
+  /** @deprecated Gunakan setSession dari SSO exchange */
+  static setUserSession(user) {
+    console.warn("[AuthManager] setUserSession deprecated — gunakan setSession via SSO exchange");
     try {
       localStorage.setItem("user_data", JSON.stringify(user));
     } catch (error) {
-      console.error("Failed to set SSO session:", error);
+      console.error("Failed to set user session:", error);
       throw new Error("Failed to save login session");
     }
-  }
-
-  /** @deprecated Gunakan setSsoSession */
-  static setUserSession(user) {
-    this.setSsoSession(user);
   }
 
   static getUserSession() {
@@ -163,18 +157,13 @@ export class AuthManager {
   }
 }
 
-// Sinkronkan localStorage cache dengan Supabase Auth state (native login only).
-// Jangan hapus sesi SSO SIMPEL saat tidak ada Supabase Auth session.
+// Sinkronkan localStorage cache dengan Supabase Auth state
 if (typeof window !== "undefined") {
-  supabase.auth.onAuthStateChange((event, session) => {
-    if (session?.user) {
-      const user = AuthManager.mapUserFromSession(session);
+  supabase.auth.onAuthStateChange((_event, session) => {
+    const user = AuthManager.mapUserFromSession(session);
+    if (user) {
       localStorage.setItem("user_data", JSON.stringify(user));
-      return;
-    }
-    if (event === "SIGNED_OUT") {
-      const existing = AuthManager.getUserSession();
-      if (existing?.access_token) return;
+    } else {
       localStorage.removeItem("user_data");
     }
   });

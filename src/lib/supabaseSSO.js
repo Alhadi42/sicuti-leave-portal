@@ -29,12 +29,23 @@ const validateEnv = () => {
 
 validateEnv();
 
+/** URL API SSO SiCuti — selalu arahkan ke domain SiCuti, bukan SIMPEL */
+export const getAuthSsoApiUrl = () => {
+  const base =
+    import.meta.env.VITE_SICUTI_APP_URL ||
+    (typeof window !== "undefined" ? window.location.origin : "");
+  return `${String(base).replace(/\/$/, "")}/api/auth-sso`;
+};
+
 /**
  * Redirect ke SIPANDAI dengan OAuth-style redirect_uri
  */
 export const redirectToSimpelLogin = () => {
   const portalUrl = import.meta.env.VITE_SIMPEL_APP_URL || "https://simpel.sipandai.site";
-  const callbackUrl = `${window.location.origin}/auth/callback`;
+  const sicutiOrigin =
+    import.meta.env.VITE_SICUTI_APP_URL ||
+    (typeof window !== "undefined" ? window.location.origin : "https://cuti.sipandai.site");
+  const callbackUrl = `${String(sicutiOrigin).replace(/\/$/, "")}/auth/callback`;
   window.location.href = `${portalUrl}/auth?redirect=${encodeURIComponent(callbackUrl)}`;
 };
 
@@ -46,7 +57,7 @@ export const exchangeSsoCredentials = async ({ code, access_token, refresh_token
   const payload = { code, access_token, refresh_token };
 
   // Same-origin Vercel API — preferred (no CORS, secrets di server)
-  const apiRes = await fetch("/api/auth-sso", {
+  const apiRes = await fetch(getAuthSsoApiUrl(), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

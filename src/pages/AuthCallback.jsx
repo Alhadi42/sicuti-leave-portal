@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthManager } from "@/lib/auth";
+import { getAuthSsoApiUrl } from "@/lib/supabaseSSO";
 import { Loader2, AlertCircle } from "lucide-react";
 
 /**
@@ -11,6 +12,14 @@ import { Loader2, AlertCircle } from "lucide-react";
  */
 
 const SIMPEL_AUTH_URL = "https://sipandai.site/auth";
+
+function getSicutiOrigin() {
+  return import.meta.env.VITE_SICUTI_APP_URL || window.location.origin;
+}
+
+function getSicutiCallbackUrl() {
+  return `${getSicutiOrigin().replace(/\/$/, "")}/auth/callback`;
+}
 
 function getPermissionsForRole(role) {
   if (role === "admin_pusat")    return ["all"];
@@ -48,7 +57,7 @@ const AuthCallback = () => {
       if (!code && !access_token) {
         console.warn("[AuthCallback] Tidak ada token/code, redirect ke SIPANDAI");
         window.location.replace(
-          `${SIMPEL_AUTH_URL}?redirect=${encodeURIComponent(window.location.origin + "/auth/callback")}`
+          `${SIMPEL_AUTH_URL}?redirect=${encodeURIComponent(getSicutiCallbackUrl())}`
         );
         return;
       }
@@ -56,7 +65,7 @@ const AuthCallback = () => {
       setStatusMsg(code ? "Menukar kode autentikasi..." : "Memulai sesi...");
 
       try {
-        const res = await fetch("/api/auth-sso", {
+        const res = await fetch(getAuthSsoApiUrl(), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -67,7 +76,7 @@ const AuthCallback = () => {
 
         // Simpan ke AuthManager — SiCuti pakai localStorage, bukan Supabase Auth
         const role = data.user?.role || "employee";
-        AuthManager.setSsoSession({
+        AuthManager.setUserSession({
           id:            data.user.id,
           email:         data.user.email,
           name:          data.user.name,
@@ -109,7 +118,7 @@ const AuthCallback = () => {
           <h2 className="text-white font-semibold text-lg">Login SSO Gagal</h2>
           <p className="text-slate-400 text-sm leading-relaxed">{errorMsg}</p>
           <a
-            href={`${SIMPEL_AUTH_URL}?redirect=${encodeURIComponent(window.location.origin + "/auth/callback")}`}
+            href={`${SIMPEL_AUTH_URL}?redirect=${encodeURIComponent(getSicutiCallbackUrl())}`}
             className="inline-flex items-center justify-center gap-2 w-full rounded-xl bg-purple-600 hover:bg-purple-500 text-white px-5 py-2.5 text-sm font-semibold transition-colors"
           >
             Kembali ke Portal SIPANDAI

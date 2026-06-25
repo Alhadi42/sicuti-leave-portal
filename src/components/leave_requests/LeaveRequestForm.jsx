@@ -20,7 +20,6 @@ import {
   fetchNationalHolidaysFromDB,
 } from "@/utils/workingDays";
 import { calculateLeaveBalance, ensureLeaveBalance } from "@/utils/leaveBalanceCalculator";
-import { resolveSingleSicutiEmployee } from "@/utils/sicutiEmployeeResolver";
 
 const LeaveRequestForm = ({
   employees,
@@ -164,10 +163,10 @@ const LeaveRequestForm = ({
     const fetchEmployeeData = async () => {
       if (initialData?.employee_id) {
         try {
-          // employee_id di leave_requests = ID lokal SiCuti
-          const { data: employee, error } = await supabase
+          // Fetch the latest employee data from SIMPEL
+          const { data: employee, error } = await supabaseSimpelAdmin
             .from("employees")
-            .select("id, nip, name, department, position_name, rank_group")
+            .select("id, nip, name, department, position_name, rank_group, asn_status")
             .eq("id", initialData.employee_id)
             .maybeSingle();
 
@@ -369,19 +368,10 @@ const LeaveRequestForm = ({
     }
   }, [initialData, signersData]);
 
-  const handleSelectEmployee = async (employee) => {
-    const resolved = await resolveSingleSicutiEmployee(employee);
-    if (!resolved) {
-      toast({
-        variant: "destructive",
-        title: "Pegawai belum tersinkron",
-        description: "Pegawai belum ada di database SiCuti. Pastikan NIP valid atau jalankan sinkronisasi pegawai.",
-      });
-      return;
-    }
+  const handleSelectEmployee = (employee) => {
     setFormData((prev) => ({
       ...prev,
-      employee_id: resolved.id,
+      employee_id: employee.id,
       employee_name: employee.name,
       employee_nip: employee.nip,
       employee_rank: employee.rank_group || "",

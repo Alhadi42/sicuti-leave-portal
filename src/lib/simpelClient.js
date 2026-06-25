@@ -14,13 +14,6 @@ const SIMPEL_ANON_KEY = import.meta.env.VITE_SIMPEL_ANON_KEY;
 let _cachedClient = null;
 let _cachedToken = null;
 
-/** In-memory storage — hindari konflik GoTrueClient dengan client SiCuti */
-const noopAuthStorage = {
-  getItem: () => null,
-  setItem: () => {},
-  removeItem: () => {},
-};
-
 function getSimpelClient() {
   const token = AuthManager.getUserSession()?.access_token;
   if (!token) {
@@ -32,12 +25,7 @@ function getSimpelClient() {
   }
   _cachedToken = token;
   _cachedClient = createClient(SIMPEL_URL, SIMPEL_ANON_KEY, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      storageKey: "sb-simpel-sso-proxy",
-      storage: noopAuthStorage,
-    },
+    auth: { persistSession: false, autoRefreshToken: false },
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
   return _cachedClient;

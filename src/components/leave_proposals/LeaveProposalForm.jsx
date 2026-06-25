@@ -19,7 +19,6 @@ import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import { validateLeaveProposal, validateEmployeeLeaveItem, sanitizeProposalData, checkLeaveConflicts } from "@/utils/leaveProposalValidation";
 import { countWorkingDays, fetchNationalHolidaysFromDB } from "@/utils/workingDays";
-import { resolveSingleSicutiEmployee } from "@/utils/sicutiEmployeeResolver";
 
 const LeaveProposalForm = ({ onSubmit, onCancel }) => {
   const { toast } = useToast();
@@ -106,10 +105,9 @@ const LeaveProposalForm = ({ onSubmit, onCancel }) => {
         }
 
         if (employee) {
-          const resolved = await resolveSingleSicutiEmployee(employee);
           setCurrentLeaveItem(prev => ({
             ...prev,
-            employee_id: resolved?.id || "",
+            employee_id: employee.id,
             employee_name: employee.name,
             employee_nip: employee.nip || "",
             employee_department: employee.department || "",
@@ -117,13 +115,6 @@ const LeaveProposalForm = ({ onSubmit, onCancel }) => {
             employee_rank: employee.rank_group || "",
           }));
           setProposalTitle(`Pengajuan Cuti - ${employee.name}`);
-          if (!resolved) {
-            toast({
-              variant: "destructive",
-              title: "Profil belum tersinkron",
-              description: "Data pegawai belum ada di SiCuti. Hubungi Admin Pusat.",
-            });
-          }
         } else {
           // Fallback to session data
           console.warn("[LeaveProposalForm] Profil pegawai tidak ditemukan di SIMPEL, fallback ke sesi.");
@@ -182,29 +173,19 @@ const LeaveProposalForm = ({ onSubmit, onCancel }) => {
     }
   }, [currentLeaveItem.start_date, currentLeaveItem.end_date, holidays]);
 
-  const handleEmployeeSelect = async (employeeId) => {
+  const handleEmployeeSelect = (employeeId) => {
     const employee = displayedEmployees.find(emp => emp.id === employeeId);
-    if (!employee) return;
-
-    const resolved = await resolveSingleSicutiEmployee(employee);
-    if (!resolved) {
-      toast({
-        variant: "destructive",
-        title: "Pegawai belum tersinkron",
-        description: "Pegawai belum ada di database SiCuti. Jalankan sinkronisasi pegawai terlebih dahulu.",
-      });
-      return;
+    if (employee) {
+      setCurrentLeaveItem(prev => ({
+        ...prev,
+        employee_id: employee.id,
+        employee_name: employee.name,
+        employee_nip: employee.nip || "",
+        employee_department: employee.department || "",
+        employee_position: employee.position_name || "",
+        employee_rank: employee.rank_group || "",
+      }));
     }
-
-    setCurrentLeaveItem(prev => ({
-      ...prev,
-      employee_id: resolved.id,
-      employee_name: employee.name,
-      employee_nip: employee.nip || "",
-      employee_department: employee.department || "",
-      employee_position: employee.position_name || "",
-      employee_rank: employee.rank_group || "",
-    }));
   };
 
   const handleLeaveTypeSelect = (leaveTypeId) => {

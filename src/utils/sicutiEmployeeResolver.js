@@ -90,22 +90,3 @@ export function attachSicutiEmployeeIds(simpelEmployees, nipToLocalId) {
     })
     .filter(Boolean);
 }
-
-/**
- * Resolve satu pegawai SIMPEL → record dengan id lokal SiCuti.
- */
-export async function resolveSingleSicutiEmployee(simpelEmployee) {
-  if (!simpelEmployee) return null;
-  const nipToLocalId = await resolveSicutiEmployeeIds([simpelEmployee]);
-  const [resolved] = attachSicutiEmployeeIds([simpelEmployee], nipToLocalId);
-  return resolved || null;
-}
-
-/**
- * Resolve banyak pegawai SIMPEL → array ID lokal SiCuti (untuk filter query).
- */
-export async function resolveSicutiIdList(simpelEmployees) {
-  if (!simpelEmployees?.length) return [];
-  const nipToLocalId = await resolveSicutiEmployeeIds(simpelEmployees);
-  return attachSicutiEmployeeIds(simpelEmployees, nipToLocalId).map((e) => e.id);
-}
