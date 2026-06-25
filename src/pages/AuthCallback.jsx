@@ -1,108 +1,143 @@
 ﻿import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/lib/supabaseClient";
 import { AuthManager } from "@/lib/auth";
 import { Loader2, AlertCircle } from "lucide-react";
 
 /**
- * AuthCallback — Pure JWT decode, no server calls
+ * AuthCallback — SSO callback handler untuk SiCuti
  *
- * Mendukung dua format dari SIMPEL ssoRedirect:
- *   1. Query string: /auth/callback?access_token=...&refresh_token=...
- *   2. URL hash:    /auth/callback#access_token=...&refresh_token=...
- *   3. Auth code:   /auth/callback?code=... (belum diimplementasi, redirect ke SIMPEL)
+ * Mendukung tiga format dari SIMPEL ssoRedirect:
+ *   1. ?code=xxx          → tukar via /api/auth-sso → setSession Supabase SiCuti (PREFERRED)
+ *   2. #access_token=...  → hash fallback, langsung setSession
+ *   3. ?access_token=...  → query fallback, langsung setSession
  */
 
-function decodeJwt(token) {
-  try {
-    const base64Url = token.split(".")[1];
-    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-    const pad = base64.length % 4;
-    const padded = pad ? base64 + "=".repeat(4 - pad) : base64;
-    return JSON.parse(window.atob(padded));
-  } catch {
-    return null;
-  }
-}
+const SIMPEL_AUTH_URL = "https://sipandai.site/auth";
 
 function getPermissionsForRole(role) {
   if (role === "admin_pusat")    return ["all"];
   if (role === "admin_pimpinan") return ["all_readonly"];
-  if (role === "admin_unit")     return ["dashboard", "employees_unit", "leave_requests_unit", "leave_history_unit", "surat_keterangan_unit"];
+  if (role === "admin_unit")     return ["dashboard","employees_unit","leave_requests_unit","leave_history_unit","surat_keterangan_unit"];
   return ["leave_requests_self", "leave_history_self"];
 }
 
-const SIMPEL_AUTH_URL = "https://simpel.sipandai.site/auth";
-
 const AuthCallback = () => {
   const navigate = useNavigate();
-  const [statusMsg, setStatusMsg] = useState("Memverifikasi token...");
+  const [statusMsg, setStatusMsg] = useState("Memverifikasi sesi...");
   const [errorMsg, setErrorMsg] = useState(null);
 
   useEffect(() => {
-    const handleCallback = () => {
-      // Cek query string dulu (?access_token=...)
+    const handleCallback = async () => {
       const queryParams = new URLSearchParams(window.location.search);
-      // Cek URL hash juga (#access_token=...)
-      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const hashParams  = new URLSearchParams(window.location.hash.replace(/^#/, ""));
 
+      const code          = queryParams.get("code");
       const access_token  = queryParams.get("access_token")  || hashParams.get("access_token");
       const refresh_token = queryParams.get("refresh_token") || hashParams.get("refresh_token");
-      const code          = queryParams.get("code");
 
-      // Kalau ada code (OAuth flow), redirect ke SIMPEL — belum diimplementasi
-      if (code && !access_token) {
-        setErrorMsg("Authorization code flow belum didukung. Silakan login ulang melalui SIPANDAI.");
-        return;
-      }
-
-      if (!access_token) {
-        console.warn("[SSO] Token tidak ditemukan, redirect ke SIPANDAI");
-        window.location.replace(
-          `${SIMPEL_AUTH_URL}?redirect=${encodeURIComponent(window.location.origin + "/auth/callback")}`
-        );
-        return;
-      }
-
-      // Bersihkan token dari URL (query + hash)
+      // Bersihkan URL secepatnya
       window.history.replaceState({}, document.title, "/auth/callback");
 
-      // Decode JWT lokal — tidak ada network request
-      const payload = decodeJwt(access_token);
+      // ── Opsi 1: Authorization code (preferred) ──────────────────────────
+      if (code) {
+        setStatusMsg("Menukar kode autentikasi...");
+        try {
+          const res = await fetch("/api/auth-sso", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "SSO exchange gagal");
 
-      if (!payload || !payload.sub || !payload.email) {
-        setErrorMsg("Token SSO tidak valid. Silakan login ulang melalui SIPANDAI.");
-        return;
+          // Set session Supabase SiCuti
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token:  data.session.access_token,
+            refresh_token: data.session.refresh_token,
+          });
+          if (sessionError) throw sessionError;
+
+          // Simpan info user ke AuthManager juga
+          if (data.user) {
+            const role = data.user.role || "employee";
+            AuthManager.setUserSession({
+              id:          data.user.id,
+              email:       data.user.email,
+              name:        data.user.name,
+              role,
+              department:  data.user.department || "Belum Ditetapkan",
+              unit_kerja:  data.user.department || "Belum Ditetapkan",
+              nip:         data.user.nip || null,
+              permissions: getPermissionsForRole(role),
+              access_token:  data.session.access_token,
+              refresh_token: data.session.refresh_token,
+              last_login:  new Date().toISOString(),
+            });
+          }
+
+          setStatusMsg("Berhasil! Mengalihkan...");
+          navigateAfterLogin(data.user?.role);
+          return;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "SSO gagal";
+          console.error("[AuthCallback] code exchange error:", msg);
+          setErrorMsg(msg);
+          return;
+        }
       }
 
-      // Cek expired
-      if (payload.exp && Date.now() / 1000 > payload.exp) {
-        setErrorMsg("Sesi sudah kadaluarsa. Silakan login ulang melalui SIPANDAI.");
-        return;
+      // ── Opsi 2: Hash / query fallback ────────────────────────────────────
+      if (access_token && refresh_token) {
+        setStatusMsg("Memulai sesi...");
+        try {
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token,
+            refresh_token,
+          });
+          if (sessionError) throw sessionError;
+
+          // Ambil data user dari session yang baru di-set
+          const { data: userData } = await supabase.auth.getUser();
+          if (userData?.user) {
+            const meta = userData.user.user_metadata || {};
+            const role = meta.role || "employee";
+            AuthManager.setUserSession({
+              id:          userData.user.id,
+              email:       userData.user.email,
+              name:        meta.full_name || userData.user.email,
+              role,
+              department:  meta.department || "Belum Ditetapkan",
+              unit_kerja:  meta.department || "Belum Ditetapkan",
+              nip:         meta.nip || null,
+              permissions: getPermissionsForRole(role),
+              access_token,
+              refresh_token,
+              last_login:  new Date().toISOString(),
+            });
+            setStatusMsg("Berhasil! Mengalihkan...");
+            navigateAfterLogin(role);
+          } else {
+            throw new Error("Tidak dapat mengambil data user");
+          }
+          return;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Set session gagal";
+          console.error("[AuthCallback] setSession error:", msg);
+          setErrorMsg(msg);
+          return;
+        }
       }
 
-      const meta = payload.user_metadata || {};
-      const role = meta.role || "employee";
-      const emailPrefix = payload.email.split("@")[0];
+      // ── Tidak ada credentials ─────────────────────────────────────────────
+      console.warn("[AuthCallback] Tidak ada token/code, redirect ke SIPANDAI");
+      window.location.replace(
+        `${SIMPEL_AUTH_URL}?redirect=${encodeURIComponent(window.location.origin + "/auth/callback")}`
+      );
+    };
 
-      const user = {
-        id:            payload.sub,
-        email:         payload.email,
-        name:          meta.full_name || emailPrefix,
-        role,
-        unit_kerja:    meta.department || "Belum Ditetapkan",
-        department:    meta.department || "Belum Ditetapkan",
-        nip:           meta.nip || (/^\d+$/.test(emailPrefix) ? emailPrefix : null),
-        permissions:   getPermissionsForRole(role),
-        access_token,
-        refresh_token: refresh_token || null,
-        last_login:    new Date().toISOString(),
-      };
-
-      console.log("[SSO] Login berhasil:", user.email, "| Role:", user.role);
-      AuthManager.setUserSession(user);
-      setStatusMsg("Berhasil! Mengalihkan...");
-
-      if (user.role === "employee") {
+    const navigateAfterLogin = (role) => {
+      if (role === "employee") {
         navigate("/leave-requests", { replace: true });
       } else {
         navigate("/employees", { replace: true });
