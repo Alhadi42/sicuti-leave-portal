@@ -1,16 +1,13 @@
 ﻿import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/lib/supabaseClient";
 import { AuthManager } from "@/lib/auth";
 import { Loader2, AlertCircle } from "lucide-react";
 
 /**
- * AuthCallback — SSO callback handler untuk SiCuti
+ * AuthCallback — SSO callback untuk SiCuti
  *
- * Mendukung tiga format dari SIMPEL ssoRedirect:
- *   1. ?code=xxx          → tukar via /api/auth-sso → setSession Supabase SiCuti (PREFERRED)
- *   2. #access_token=...  → hash fallback, langsung setSession
- *   3. ?access_token=...  → query fallback, langsung setSession
+ * Menerima code dari SIPANDAI, tukar via /api/auth-sso,
+ * lalu simpan ke AuthManager (localStorage). Tidak perlu Supabase Auth SiCuti.
  */
 
 const SIMPEL_AUTH_URL = "https://sipandai.site/auth";
@@ -37,117 +34,65 @@ const AuthCallback = () => {
       const access_token  = queryParams.get("access_token")  || hashParams.get("access_token");
       const refresh_token = queryParams.get("refresh_token") || hashParams.get("refresh_token");
 
-      // Bersihkan URL secepatnya
+      // Bersihkan URL
       window.history.replaceState({}, document.title, "/auth/callback");
 
-      // SSO code flow gagal di sisi SIPANDAI
       if (sso_error) {
         setErrorMsg("Sesi SSO gagal dibuat. Silakan login ulang melalui portal SIPANDAI.");
         return;
       }
 
-      // ── Opsi 1: Authorization code (preferred) ──────────────────────────
-      if (code) {
-        setStatusMsg("Menukar kode autentikasi...");
-        try {
-          const res = await fetch("/api/auth-sso", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || "SSO exchange gagal");
+      // Siapkan payload untuk /api/auth-sso
+      const payload = code ? { code } : { access_token, refresh_token };
 
-          // Set session Supabase SiCuti
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token:  data.session.access_token,
-            refresh_token: data.session.refresh_token,
-          });
-          if (sessionError) throw sessionError;
-
-          // Simpan info user ke AuthManager juga
-          if (data.user) {
-            const role = data.user.role || "employee";
-            AuthManager.setUserSession({
-              id:          data.user.id,
-              email:       data.user.email,
-              name:        data.user.name,
-              role,
-              department:  data.user.department || "Belum Ditetapkan",
-              unit_kerja:  data.user.department || "Belum Ditetapkan",
-              nip:         data.user.nip || null,
-              permissions: getPermissionsForRole(role),
-              access_token:  data.session.access_token,
-              refresh_token: data.session.refresh_token,
-              last_login:  new Date().toISOString(),
-            });
-          }
-
-          setStatusMsg("Berhasil! Mengalihkan...");
-          navigateAfterLogin(data.user?.role);
-          return;
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : "SSO gagal";
-          console.error("[AuthCallback] code exchange error:", msg);
-          setErrorMsg(msg);
-          return;
-        }
+      if (!code && !access_token) {
+        console.warn("[AuthCallback] Tidak ada token/code, redirect ke SIPANDAI");
+        window.location.replace(
+          `${SIMPEL_AUTH_URL}?redirect=${encodeURIComponent(window.location.origin + "/auth/callback")}`
+        );
+        return;
       }
 
-      // ── Opsi 2: Hash / query fallback ────────────────────────────────────
-      if (access_token && refresh_token) {
-        setStatusMsg("Memulai sesi...");
-        try {
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token,
-            refresh_token,
-          });
-          if (sessionError) throw sessionError;
+      setStatusMsg(code ? "Menukar kode autentikasi..." : "Memulai sesi...");
 
-          // Ambil data user dari session yang baru di-set
-          const { data: userData } = await supabase.auth.getUser();
-          if (userData?.user) {
-            const meta = userData.user.user_metadata || {};
-            const role = meta.role || "employee";
-            AuthManager.setUserSession({
-              id:          userData.user.id,
-              email:       userData.user.email,
-              name:        meta.full_name || userData.user.email,
-              role,
-              department:  meta.department || "Belum Ditetapkan",
-              unit_kerja:  meta.department || "Belum Ditetapkan",
-              nip:         meta.nip || null,
-              permissions: getPermissionsForRole(role),
-              access_token,
-              refresh_token,
-              last_login:  new Date().toISOString(),
-            });
-            setStatusMsg("Berhasil! Mengalihkan...");
-            navigateAfterLogin(role);
-          } else {
-            throw new Error("Tidak dapat mengambil data user");
-          }
-          return;
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : "Set session gagal";
-          console.error("[AuthCallback] setSession error:", msg);
-          setErrorMsg(msg);
-          return;
+      try {
+        const res = await fetch("/api/auth-sso", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "SSO exchange gagal");
+
+        // Simpan ke AuthManager — SiCuti pakai localStorage, bukan Supabase Auth
+        const role = data.user?.role || "employee";
+        AuthManager.setUserSession({
+          id:            data.user.id,
+          email:         data.user.email,
+          name:          data.user.name,
+          role,
+          department:    data.user.department || "Belum Ditetapkan",
+          unit_kerja:    data.user.department || "Belum Ditetapkan",
+          nip:           data.user.nip || null,
+          employee_id:   data.user.employee_id || null,
+          permissions:   getPermissionsForRole(role),
+          access_token:  data.session.access_token,
+          refresh_token: data.session.refresh_token,
+          last_login:    new Date().toISOString(),
+        });
+
+        setStatusMsg("Berhasil! Mengalihkan...");
+
+        if (role === "employee") {
+          navigate("/leave-requests", { replace: true });
+        } else {
+          navigate("/employees", { replace: true });
         }
-      }
-
-      // ── Tidak ada credentials ─────────────────────────────────────────────
-      console.warn("[AuthCallback] Tidak ada token/code, redirect ke SIPANDAI");
-      window.location.replace(
-        `${SIMPEL_AUTH_URL}?redirect=${encodeURIComponent(window.location.origin + "/auth/callback")}`
-      );
-    };
-
-    const navigateAfterLogin = (role) => {
-      if (role === "employee") {
-        navigate("/leave-requests", { replace: true });
-      } else {
-        navigate("/employees", { replace: true });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "SSO gagal";
+        console.error("[AuthCallback]", msg);
+        setErrorMsg(msg);
       }
     };
 

@@ -65,14 +65,17 @@ export class AuthManager {
   }
 
   static async refreshUserSession() {
+    // Cek Supabase Auth session (untuk user yang login via Supabase native)
     const { data } = await supabase.auth.getSession();
     const user = this.mapUserFromSession(data.session);
     if (user) {
+      // Update cache dari Supabase Auth
       localStorage.setItem("user_data", JSON.stringify(user));
-    } else {
-      localStorage.removeItem("user_data");
+      return user;
     }
-    return user;
+    // Jika tidak ada Supabase session, jangan hapus cache SSO (dari SIMPEL)
+    // Kembalikan apa yang ada di localStorage
+    return this.getUserSession();
   }
 
   static clearSession() {
