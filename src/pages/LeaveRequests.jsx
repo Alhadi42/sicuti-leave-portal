@@ -40,6 +40,7 @@ import { id } from "date-fns/locale";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useLeaveTypes } from "@/hooks/useLeaveTypes";
 import { AuthManager } from "@/lib/auth";
+import { resolveSingleSicutiEmployee, resolveSicutiIdList } from "@/utils/sicutiEmployeeResolver";
 
 const LeaveRequests = () => {
   const { toast } = useToast();
@@ -81,32 +82,33 @@ const LeaveRequests = () => {
       let employeeIdsFilter = null;
       const NO_ID = '00000000-0000-0000-0000-000000000000';
 
-      // Employee: cari di SIMPEL by NIP atau user ID
+      // Employee: cari di SIMPEL by NIP, lalu map ke ID lokal SiCuti
       if (currentUser && currentUser.role === 'employee') {
         let simpelEmployee = null;
         if (currentUser.nip) {
           const { data: d1 } = await supabaseSimpelAdmin
-            .from('employees').select('id').eq('nip', currentUser.nip).maybeSingle();
+            .from('employees').select('id, nip, name, department, position_name, rank_group').eq('nip', currentUser.nip).maybeSingle();
           simpelEmployee = d1;
         }
         if (!simpelEmployee && currentUser.id) {
           const { data: d2 } = await supabaseSimpelAdmin
-            .from('employees').select('id').eq('id', currentUser.id).maybeSingle();
+            .from('employees').select('id, nip, name, department, position_name, rank_group').eq('id', currentUser.id).maybeSingle();
           simpelEmployee = d2;
         }
         if (simpelEmployee) {
-          employeeIdsFilter = [simpelEmployee.id];
-          countQuery = countQuery.eq('employee_id', simpelEmployee.id);
+          const resolved = await resolveSingleSicutiEmployee(simpelEmployee);
+          employeeIdsFilter = resolved ? [resolved.id] : [];
+          countQuery = countQuery.eq('employee_id', resolved?.id || NO_ID);
         } else {
           countQuery = countQuery.eq('employee_id', NO_ID);
           employeeIdsFilter = [];
         }
       } else if (currentUser && currentUser.role === 'admin_unit' && userUnit) {
-        // admin_unit: ambil semua ID pegawai dari unitnya di SIMPEL
+        // admin_unit: ambil pegawai unit dari SIMPEL, map ke ID SiCuti
         const { data: unitEmps, error: empErr } = await supabaseSimpelAdmin
-          .from('employees').select('id').eq('department', userUnit);
+          .from('employees').select('id, nip, name, department, position_name, rank_group').eq('department', userUnit);
         if (!empErr) {
-          employeeIdsFilter = (unitEmps || []).map(e => e.id);
+          employeeIdsFilter = await resolveSicutiIdList(unitEmps || []);
           if (employeeIdsFilter.length > 0) {
             countQuery = countQuery.in('employee_id', employeeIdsFilter);
           } else {

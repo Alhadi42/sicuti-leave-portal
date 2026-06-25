@@ -2,6 +2,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import { useToast } from "@/components/ui/use-toast";
 import { AuthManager } from "@/lib/auth";
+import { resolveSingleSicutiEmployee } from "@/utils/sicutiEmployeeResolver";
 
 export const useLeaveProposals = () => {
   const { toast } = useToast();
@@ -184,8 +185,22 @@ export const useLeaveProposals = () => {
 
       // 1. For each item in the proposal, insert a record into leave_requests
       for (const item of items) {
+        // Pastikan employee_id adalah ID lokal SiCuti (bukan ID SIMPEL)
+        let sicutiEmployeeId = item.employee_id;
+        if (item.employee_nip) {
+          const resolved = await resolveSingleSicutiEmployee({
+            id: item.employee_id,
+            nip: item.employee_nip,
+            name: item.employee_name,
+            department: item.employee_department,
+            position_name: item.employee_position,
+            rank_group: item.employee_rank,
+          });
+          if (resolved) sicutiEmployeeId = resolved.id;
+        }
+
         const leaveRequestData = {
-          employee_id: item.employee_id,
+          employee_id: sicutiEmployeeId,
           leave_type_id: item.leave_type_id,
           start_date: item.start_date,
           end_date: item.end_date,
@@ -211,7 +226,7 @@ export const useLeaveProposals = () => {
         const { error: rpcErr } = await supabase.rpc(
           "update_leave_balance_with_splitting",
           {
-            p_employee_id: item.employee_id,
+            p_employee_id: sicutiEmployeeId,
             p_leave_type_id: item.leave_type_id,
             p_requested_year: item.leave_quota_year,
             p_days: item.days_requested,

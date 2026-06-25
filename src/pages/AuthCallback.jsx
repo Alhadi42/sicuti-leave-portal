@@ -67,7 +67,7 @@ const AuthCallback = () => {
 
         // Simpan ke AuthManager — SiCuti pakai localStorage, bukan Supabase Auth
         const role = data.user?.role || "employee";
-        AuthManager.setUserSession({
+        AuthManager.setSsoSession({
           id:            data.user.id,
           email:         data.user.email,
           name:          data.user.name,

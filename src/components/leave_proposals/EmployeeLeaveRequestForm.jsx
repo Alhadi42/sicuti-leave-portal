@@ -18,6 +18,7 @@ import { useLeaveTypes } from "@/hooks/useLeaveTypes";
 import { useToast } from "@/components/ui/use-toast";
 import { countWorkingDays, fetchNationalHolidaysFromDB } from "@/utils/workingDays";
 import { calculateLeaveBalance, ensureLeaveBalance } from "@/utils/leaveBalanceCalculator";
+import { resolveSingleSicutiEmployee } from "@/utils/sicutiEmployeeResolver";
 import { Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -101,7 +102,14 @@ const EmployeeLeaveRequestForm = ({ onSubmit, onCancel }) => {
         }
 
         if (emp) {
-          setProfile(emp);
+          const resolved = await resolveSingleSicutiEmployee(emp);
+          if (resolved) {
+            setProfile(resolved);
+          } else {
+            setProfileError(
+              "Profil pegawai belum tersinkron ke SiCuti. Hubungi Admin Pusat untuk sinkronisasi pegawai.",
+            );
+          }
         } else {
           // Fallback ke data sesi jika tidak ada di SIMPEL
           if (currentUser?.name) {
