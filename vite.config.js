@@ -2,6 +2,7 @@ import path from "node:path";
 import react from "@vitejs/plugin-react";
 import { createLogger, defineConfig } from "vite";
 import { VitePWA } from 'vite-plugin-pwa';
+import vitePluginSsoApi from "./plugins/vite-plugin-sso-api.js";
 
 const isDev = process.env.NODE_ENV !== "production";
 let inlineEditPlugin, editModeDevPlugin;
@@ -200,7 +201,7 @@ export default defineConfig({
 	customLogger: logger,
 	plugins: [
 		react(),
-		...(isDev ? [inlineEditPlugin(), editModeDevPlugin()] : []),
+		...(isDev ? [vitePluginSsoApi(), inlineEditPlugin(), editModeDevPlugin()] : []),
 		// addTransformIndexHtml,
 		VitePWA({
 			registerType: 'autoUpdate',

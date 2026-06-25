@@ -39,16 +39,39 @@ export const redirectToSimpelLogin = () => {
 };
 
 /**
- * Tukar authorization code / token via Edge Function auth-sso
+ * Tukar authorization code / token via API server (same-origin, tanpa CORS)
+ * Fallback ke Supabase Edge Function jika VITE_SSO_USE_EDGE_FUNCTION=true
  */
 export const exchangeSsoCredentials = async ({ code, access_token, refresh_token }) => {
-  const { data, error } = await supabase.functions.invoke("auth-sso", {
-    body: { code, access_token, refresh_token },
+  const payload = { code, access_token, refresh_token };
+
+  // Same-origin Vercel API — preferred (no CORS, secrets di server)
+  const apiRes = await fetch("/api/auth-sso", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
 
-  if (error) throw error;
-  if (data?.error) throw new Error(data.error);
-  return data;
+  const apiData = await apiRes.json().catch(() => ({}));
+
+  if (apiRes.ok && !apiData.error) {
+    return apiData;
+  }
+
+  // Fallback: Supabase Edge Function (jika sudah di-deploy)
+  if (import.meta.env.VITE_SSO_USE_EDGE_FUNCTION === "true") {
+    const { data, error } = await supabase.functions.invoke("auth-sso", {
+      body: payload,
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    return data;
+  }
+
+  throw new Error(
+    apiData.error ||
+      "SSO exchange gagal. Pastikan env server (SUPABASE_SERVICE_ROLE_KEY, SIMPEL_*) sudah diset di Vercel.",
+  );
 };
 
 /**
