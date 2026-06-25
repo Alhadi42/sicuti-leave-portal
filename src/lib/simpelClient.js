@@ -6,12 +6,11 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { AuthManager } from "./auth";
+import { createDisabledAuthOptions, getOrCreateClient } from "./supabaseAuthOptions";
 
 const SIMPEL_URL = import.meta.env.VITE_SIMPEL_URL;
 const SIMPEL_ANON_KEY = import.meta.env.VITE_SIMPEL_ANON_KEY;
 
-// Cache client per token agar tidak membuat instance baru setiap query
-let _cachedClient = null;
 let _cachedToken = null;
 
 function getSimpelClient() {
@@ -19,16 +18,23 @@ function getSimpelClient() {
   if (!token) {
     throw new Error("Sesi tidak aktif. Silakan login ulang melalui SIPANDAI.");
   }
-  // Reuse client jika token sama
-  if (_cachedClient && _cachedToken === token) {
-    return _cachedClient;
+
+  if (_cachedToken === token) {
+    return getOrCreateClient("simpel-query", () => createSimpelClient(token));
   }
+
   _cachedToken = token;
-  _cachedClient = createClient(SIMPEL_URL, SIMPEL_ANON_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
+  if (typeof window !== "undefined" && window.__sicutiSupabaseClients) {
+    delete window.__sicutiSupabaseClients["simpel-query"];
+  }
+  return getOrCreateClient("simpel-query", () => createSimpelClient(token));
+}
+
+function createSimpelClient(token) {
+  return createClient(SIMPEL_URL, SIMPEL_ANON_KEY, {
+    ...createDisabledAuthOptions("sb-simpel-query-client"),
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
-  return _cachedClient;
 }
 
 class SimpelQueryBuilder {

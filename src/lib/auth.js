@@ -40,15 +40,22 @@ export class AuthManager {
     if (error) throw error;
   }
 
-  /** @deprecated Gunakan setSession dari SSO exchange */
-  static setUserSession(user) {
-    console.warn("[AuthManager] setUserSession deprecated — gunakan setSession via SSO exchange");
+  /**
+   * Simpan sesi SSO (token SIMPEL + profil user) ke localStorage.
+   * Dipakai setelah /api/auth-sso — bukan Supabase Auth SiCuti.
+   */
+  static setSsoSession(user) {
     try {
       localStorage.setItem("user_data", JSON.stringify(user));
     } catch (error) {
-      console.error("Failed to set user session:", error);
+      console.error("Failed to set SSO session:", error);
       throw new Error("Failed to save login session");
     }
+  }
+
+  /** @deprecated Gunakan setSsoSession */
+  static setUserSession(user) {
+    this.setSsoSession(user);
   }
 
   static getUserSession() {
@@ -157,14 +164,13 @@ export class AuthManager {
   }
 }
 
-// Sinkronkan localStorage cache dengan Supabase Auth state
+// Sinkronkan cache hanya dari Supabase Auth SiCuti (login native).
+// Jangan hapus cache SSO saat tidak ada session SiCuti — user SSO pakai token SIMPEL.
 if (typeof window !== "undefined") {
   supabase.auth.onAuthStateChange((_event, session) => {
     const user = AuthManager.mapUserFromSession(session);
     if (user) {
       localStorage.setItem("user_data", JSON.stringify(user));
-    } else {
-      localStorage.removeItem("user_data");
     }
   });
 }
