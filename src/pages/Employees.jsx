@@ -19,7 +19,7 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/supabaseClient';
 import EmployeeTable from '@/components/employees/EmployeeTable';
-import { useEmployeeData } from '@/hooks/useEmployeeData';
+import { useSimpelEmployeeData } from '@/hooks/useSimpelEmployees';
 import { Label } from '@/components/ui/label';
 import { exportEmployeesToExcel } from '@/utils/excelUtils';
 import { AuthManager } from '@/lib/auth';
