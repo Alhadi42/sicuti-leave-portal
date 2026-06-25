@@ -1,4 +1,4 @@
-import { supabase } from "./supabaseOptimized";
+import { supabase } from "./supabaseClient";
 import { AuthManager } from "./auth";
 
 /**
