@@ -2,26 +2,31 @@ import { createClient } from "@supabase/supabase-js";
 import EnvironmentValidator from "./environmentValidator";
 
 // Re-export useAuth hook for backward compatibility
-// Note: useAuth is now in @/hooks/useAuth, but we export it here for convenience
 export { useAuth } from "@/hooks/useAuth";
 
-// Validate environment before creating client
 const config = EnvironmentValidator.getConfig();
 
-// Create Supabase client with optimized configuration
+/**
+ * Client utama SiCuti — SATU-SATUNYA GoTrueClient di aplikasi.
+ *
+ * Menggunakan service_role key agar bisa bypass RLS karena aplikasi ini
+ * menggunakan custom SSO (JWT SIMPEL decode via AuthManager),
+ * bukan Supabase Auth session. Tanpa service_role, semua query
+ * akan gagal karena RLS menolak anon key tanpa auth.session.
+ *
+ * Auth dinonaktifkan karena tidak ada Supabase Auth yang dipakai —
+ * autentikasi sepenuhnya lewat JWT SIMPEL + localStorage AuthManager.
+ */
 export const supabase = createClient(
   config.supabase.url,
-  config.supabase.anonKey,
+  config.supabase.serviceRoleKey || config.supabase.anonKey,
   {
     auth: {
-      autoRefreshToken: true,
-      persistSession: true,
+      autoRefreshToken: false,
+      persistSession: false,
       detectSessionInUrl: false,
-      flowType: "pkce",
     },
-    db: {
-      schema: "public",
-    },
+    db: { schema: "public" },
     global: {
       headers: {
         "x-application-name": "sistem-cuti",
@@ -31,24 +36,8 @@ export const supabase = createClient(
   },
 );
 
-// Create admin client with service role for server-side operations
-// Falls back to anon key if service role key is not available (client-side usage)
-export const supabaseAdmin = createClient(
-  config.supabase.url,
-  config.supabase.serviceRoleKey || config.supabase.anonKey,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-    db: {
-      schema: "public",
-    },
-    global: {
-      headers: {
-        "x-application-name": "sistem-cuti-admin",
-        "x-client-version": config.app.version,
-      },
-    },
-  },
-);
+/**
+ * Alias — sama persis dengan supabase di atas.
+ * Dipertahankan untuk backward-compat dengan kode yang import supabaseAdmin.
+ */
+export const supabaseAdmin = supabase;

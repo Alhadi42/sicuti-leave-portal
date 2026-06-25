@@ -271,7 +271,8 @@ const Employees = () => {
         description: "Mohon tunggu, sedang menyiapkan file Excel.",
       });
 
-      let query = supabase
+      // Export dari SIMPEL — sumber data pegawai resmi
+      let query = supabaseSimpelAdmin
         .from("employees")
         .select("id, nip, name, position_name, department, asn_status, rank_group, position_type");
 

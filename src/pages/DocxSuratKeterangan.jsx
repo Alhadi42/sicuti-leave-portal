@@ -33,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/lib/supabaseClient";
+import { supabaseSimpelAdmin } from "@/lib/supabaseSSO";
 import { formatDateRange } from "@/utils/dateFormatters";
 import DocxFormFiller from "@/components/DocxFormFiller";
 import {
@@ -95,17 +96,16 @@ const getSignatoryByName = async (signatoryName) => {
   if (!signatoryName) return null;
 
   try {
-    // Cari di database employees
-    // Prioritize exact match first
-    let { data: employeeData, error } = await supabase
+    // Cari di SIMPEL — exact match dulu
+    let { data: employeeData, error } = await supabaseSimpelAdmin
       .from("employees")
       .select("name, nip, position_name, rank_group, department")
       .eq("name", signatoryName)
       .limit(1);
 
     if (!employeeData || employeeData.length === 0) {
-      // Fallback to partial match if exact match fails
-      const { data: partialData, error: partialError } = await supabase
+      // Fallback partial match
+      const { data: partialData, error: partialError } = await supabaseSimpelAdmin
         .from("employees")
         .select("name, nip, position_name, rank_group, department")
         .ilike("name", `%${signatoryName}%`)
@@ -592,7 +592,7 @@ function DocxSuratKeterangan() {
     let freshEmployeeData = null;
     if (employeeData?.id) {
       try {
-        const { data: empData, error } = await supabase
+        const { data: empData, error } = await supabaseSimpelAdmin
           .from("employees")
           .select("id, name, nip, position_name, rank_group, department")
           .eq("id", employeeData.id)

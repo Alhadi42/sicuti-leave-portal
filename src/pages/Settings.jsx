@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import { supabaseSimpelAdmin } from "@/lib/supabaseSSO";
 import { withErrorHandling, formatErrorMessage } from "@/utils/errorHandler";
 import { readExcelFile, createExcelTemplate, exportToExcel, validateExcelFile } from '@/utils/excelUtils';
 import { format } from "date-fns";
@@ -76,8 +77,8 @@ const Settings = () => {
 
     const loadStats = withErrorHandling(async () => {
       try {
-        // Get total employees count
-        const { count: employeeCount, error: employeeError } = await supabase
+        // Get total employees count — dari SIMPEL
+        const { count: employeeCount, error: employeeError } = await supabaseSimpelAdmin
           .from("employees")
           .select("id", { count: "exact", head: true });
 
@@ -183,7 +184,7 @@ const Settings = () => {
       let hasMore = true;
 
       while (hasMore) {
-        const { data: employees, error } = await supabase
+        const { data: employees, error } = await supabaseSimpelAdmin
           .from("employees")
           .select(
             "nip, name, position_name, department, asn_status, rank_group, position_type",

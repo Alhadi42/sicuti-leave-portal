@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import { supabaseSimpelAdmin } from "@/lib/supabaseSSO";
 import { useAuth } from "@/hooks/useAuth";
 import { checkSupabaseConnection } from "@/utils/supabaseHealthChecker";
 
@@ -167,8 +168,8 @@ const LeaveHistoryPage = () => {
       try {
         const currentUser = profile;
 
-        // Build the base query for employees
-        let query = supabase
+        // Build the base query for employees — query SIMPEL bukan tabel lokal
+        let query = supabaseSimpelAdmin
           .from("employees")
           .select("id, name, nip, department, position_name, rank_group", {
             count: "exact",
@@ -223,7 +224,7 @@ const LeaveHistoryPage = () => {
 
         // Get total employees count on initial load only
         if (isInitialLoad && overallTotalEmployees === 0) {
-          let totalCountQuery = supabase
+          let totalCountQuery = supabaseSimpelAdmin
             .from("employees")
             .select("*", { count: "exact", head: true });
 

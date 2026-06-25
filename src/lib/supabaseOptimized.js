@@ -1,37 +1,14 @@
-﻿import { createClient } from "@supabase/supabase-js";
+﻿/**
+ * supabaseOptimized.js
+ *
+ * Re-export supabase dari supabaseClient.js sebagai single source of truth.
+ * TIDAK membuat createClient baru — itu menyebabkan "Multiple GoTrueClient" warning.
+ *
+ * Class DatabaseOptimizer, OptimizedQueries, dan ConnectionMonitor tetap di sini
+ * karena dipakai oleh beberapa komponen (Dashboard, dll).
+ */
+import { supabase } from "./supabaseClient";
 import { PerformanceMonitor } from "./performance";
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    "Missing Supabase environment variables. Please check your .env file.",
-  );
-}
-
-// Optimized Supabase client configuration
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-  db: {
-    schema: "public",
-  },
-  global: {
-    headers: {
-      "x-application-name": "sistem-cuti",
-    },
-  },
-  // Connection pooling and optimization
-  realtime: {
-    params: {
-      eventsPerSecond: 10,
-    },
-  },
-});
 
 // Database query optimization helpers
 export class DatabaseOptimizer {
@@ -177,7 +154,7 @@ export const OptimizedQueries = {
     );
   },
 
-  // Paginated employee query with search
+  // Paginated employee query with search — langsung via SIMPEL client
   async getEmployeesPaginated(options = {}) {
     const {
       page = 1,
@@ -190,6 +167,9 @@ export const OptimizedQueries = {
 
     const offset = (page - 1) * limit;
     const cacheKey = `employees-page-${page}-${limit}-${search}-${department}-${orderBy}-${orderDirection}`;
+
+    // Import lazy untuk hindari circular dependency
+    const { supabaseSimpelAdmin } = await import("./supabaseSSO");
 
     return DatabaseOptimizer.cachedQuery(
       cacheKey,
@@ -285,7 +265,7 @@ export const ConnectionMonitor = {
       return {
         connected: true,
         version: data,
-        url: supabaseUrl,
+        url: import.meta.env.VITE_SUPABASE_URL,
       };
     } catch (error) {
       return {
