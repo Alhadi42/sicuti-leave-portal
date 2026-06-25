@@ -39,19 +39,8 @@ export const optimizeForProduction = () => {
     }
   });
 
-  // Preload critical resources
-  const criticalResources = [
-    '/manifest.json',
-    '/favicon.ico'
-  ];
-
-  criticalResources.forEach(resource => {
-    const link = document.createElement('link');
-    link.rel = 'preload';
-    link.href = resource;
-    link.as = resource.endsWith('.json') ? 'fetch' : 'image';
-    document.head.appendChild(link);
-  });
+  // Preload dihapus — manifest/favicon sudah di index.html;
+  // preload dinamis tanpa crossorigin memicu warning di browser.
 };
 
 // Memory optimization

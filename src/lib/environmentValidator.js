@@ -16,8 +16,8 @@ const REQUIRED_ENV_VARS = {
   },
   VITE_SUPABASE_SERVICE_ROLE_KEY: {
     required: false,
-    validate: (value) => !value || (value.length > 50 && value.startsWith("ey")),
-    error: "VITE_SUPABASE_SERVICE_ROLE_KEY must be a valid Supabase service role key",
+    validate: () => true,
+    error: "VITE_SUPABASE_SERVICE_ROLE_KEY tidak boleh digunakan di frontend — gunakan Edge Functions",
   },
 };
 

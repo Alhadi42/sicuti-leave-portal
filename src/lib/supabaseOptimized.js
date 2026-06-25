@@ -287,4 +287,5 @@ if (typeof window !== "undefined") {
 }
 
 // Export optimized client
+export { supabase };
 export default supabase;

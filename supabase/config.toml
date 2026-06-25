@@ -1,1 +1,7 @@
 project_id = "ociedycfgkqvcqwdxprt"
+
+[functions.auth-sso]
+verify_jwt = false
+
+[functions.simpel-proxy]
+verify_jwt = false
