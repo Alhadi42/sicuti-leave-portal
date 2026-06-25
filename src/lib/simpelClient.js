@@ -1,26 +1,24 @@
 /**
  * simpelClient.js
  *
- * Proxy client ke database SIMPEL via Edge Function `simpel-proxy`.
- * Menggantikan supabaseSimpelAdmin langsung — service_role tidak lagi di browser.
+ * Client langsung ke database SIMPEL menggunakan token SSO dari AuthManager.
+ * Menggunakan VITE_SIMPEL_URL + VITE_SIMPEL_ANON_KEY dengan RLS via token user.
  */
-import { supabase } from "./supabaseClient";
+import { createClient } from "@supabase/supabase-js";
+import { AuthManager } from "./auth";
 
-async function invokeProxy(payload) {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
+const SIMPEL_URL = import.meta.env.VITE_SIMPEL_URL;
+const SIMPEL_ANON_KEY = import.meta.env.VITE_SIMPEL_ANON_KEY;
+
+function getSimpelClient() {
+  const token = AuthManager.getUserSession()?.access_token;
   if (!token) {
     throw new Error("Sesi tidak aktif. Silakan login ulang melalui SIPANDAI.");
   }
-
-  const { data, error } = await supabase.functions.invoke("simpel-proxy", {
-    body: payload,
-    headers: { Authorization: `Bearer ${token}` },
+  return createClient(SIMPEL_URL, SIMPEL_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${token}` } },
   });
-
-  if (error) throw error;
-  if (data?.error) throw new Error(data.error);
-  return data;
 }
 
 class SimpelQueryBuilder {
@@ -151,8 +149,45 @@ class SimpelQueryBuilder {
 
   async execute() {
     try {
-      const result = await invokeProxy(this._buildPayload());
-      return { data: result.data, error: null, count: result.count };
+      const client = getSimpelClient();
+      let query;
+
+      if (this._action === "select") {
+        query = client.from(this._table).select(this._select, {
+          count: this._count,
+          head: this._head,
+        });
+      } else if (this._action === "insert") {
+        query = client.from(this._table).insert(this._data).select();
+      } else if (this._action === "update") {
+        query = client.from(this._table).update(this._data);
+      } else if (this._action === "upsert") {
+        query = client.from(this._table).upsert(this._data, this._upsertOptions ?? {}).select();
+      } else {
+        throw new Error(`Action tidak didukung: ${this._action}`);
+      }
+
+      // Apply filters
+      for (const f of this._filters) {
+        if (f.op === "eq")     query = query.eq(f.column, f.value);
+        else if (f.op === "in")     query = query.in(f.column, f.value);
+        else if (f.op === "ilike")  query = query.ilike(f.column, f.value);
+        else if (f.op === "not.is") query = query.not(f.column, "is", f.value);
+        else if (f.op === "gte")    query = query.gte(f.column, f.value);
+        else if (f.op === "lte")    query = query.lte(f.column, f.value);
+      }
+
+      if (this._or)    query = query.or(this._or);
+      if (this._order) query = query.order(this._order.column, { ascending: this._order.ascending });
+      if (this._range) query = query.range(this._range.from, this._range.to);
+      if (this._limit) query = query.limit(this._limit);
+
+      let result;
+      if (this._single)       result = await query.single();
+      else if (this._maybeSingle) result = await query.maybeSingle();
+      else                    result = await query;
+
+      return { data: result.data, error: result.error, count: result.count ?? null };
     } catch (err) {
       return { data: null, error: err, count: null };
     }
