@@ -363,7 +363,7 @@ const Employees = () => {
           </div>
         </div>
         <div className="flex space-x-2 mt-4 sm:mt-0">
-          {canEditData && (
+          {isMasterAdmin && (
             <Button 
               onClick={handleSyncFromSimpel} 
               disabled={isSyncing}
