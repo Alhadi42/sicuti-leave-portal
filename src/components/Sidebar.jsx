@@ -123,7 +123,8 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
 
   const handleLogout = () => {
     AuthManager.logout();
-    window.location.href = '/';
+    const portalUrl = import.meta.env.VITE_SIMPEL_APP_URL || 'https://sipandai.site';
+    window.location.href = `${portalUrl}/portal`;
   };
 
   const handleItemClick = () => {
