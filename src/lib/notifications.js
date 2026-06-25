@@ -358,14 +358,22 @@ export class NotificationManager {
   }
 }
 
-// Auto-initialize notifications when user is logged in
+// Auto-initialize notifications setelah session auth siap (hindari websocket race)
 if (typeof window !== "undefined") {
-  document.addEventListener("DOMContentLoaded", () => {
-    if (AuthManager.isAuthenticated()) {
+  const initNotificationsWhenReady = async () => {
+    const { supabase } = await import("./supabaseClient");
+    const { data } = await supabase.auth.getSession();
+    if (data.session && AuthManager.isAuthenticated()) {
       NotificationManager.initialize();
       NotificationManager.requestPermission();
     }
-  });
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initNotificationsWhenReady);
+  } else {
+    initNotificationsWhenReady();
+  }
 
   window.addEventListener("beforeunload", () => {
     NotificationManager.disconnect();

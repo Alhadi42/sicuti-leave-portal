@@ -209,11 +209,12 @@ export default defineConfig({
 			devOptions: {
 				enabled: false // nonaktifkan di dev untuk menghindari konflik
 			},
-			workbox: {
-				globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
-				cleanupOutdatedCaches: true,
-				skipWaiting: true,
-				clientsClaim: true,
+    workbox: {
+      globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+      cleanupOutdatedCaches: true,
+      skipWaiting: true,
+      clientsClaim: true,
+      navigateFallback: null,
 				maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB to accommodate large bundles
 				runtimeCaching: [
 					{

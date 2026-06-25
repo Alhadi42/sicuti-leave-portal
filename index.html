@@ -24,8 +24,31 @@
   <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.svg" />
   <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.svg" />
 
-  <!-- PWA Manifest -->
-  <link rel="manifest" href="/manifest.json" />
+  <!-- PWA Manifest (crossorigin agar match dengan fetch credentials browser) -->
+  <link rel="manifest" href="/manifest.json" crossorigin="anonymous" />
+
+  <!-- Paksa refresh cache setelah deploy besar (SSO v2) -->
+  <script>
+    (function () {
+      var VERSION = '2.0.0-sso';
+      var KEY = 'sicuti_app_version';
+      try {
+        if (localStorage.getItem(KEY) !== VERSION) {
+          localStorage.setItem(KEY, VERSION);
+          if ('caches' in window) {
+            caches.keys().then(function (keys) {
+              keys.forEach(function (k) { caches.delete(k); });
+            });
+          }
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function (regs) {
+              regs.forEach(function (r) { r.unregister(); });
+            });
+          }
+        }
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
 
   <!-- CRITICAL: Force Unregister OLD/STALE Service Workers (bukan yang baru dari VitePWA) -->
   <script>
