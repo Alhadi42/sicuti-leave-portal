@@ -1,4 +1,4 @@
-﻿import { supabase } from "./supabaseClient";
+import { supabase } from "./supabaseClient";
 import { AuditLogger, AUDIT_EVENTS } from "./auditLogger";
 
 /**
@@ -40,9 +40,33 @@ export class AuthManager {
     if (error) throw error;
   }
 
-  /** @deprecated Gunakan setSession dari SSO exchange */
+  /**
+   * Digunakan untuk SSO dari SIMPEL, simpan user ke localStorage tanpa Supabase Auth
+   */
+  static async establishSsoSession({ user, session, simpel_session }) {
+    this.setSsoSession({
+      ...user,
+      permissions: user.permissions || [],
+      access_token: simpel_session?.access_token,
+      refresh_token: simpel_session?.refresh_token,
+      last_login: new Date().toISOString(),
+    });
+  }
+
+  /**
+   * Simpan sesi SSO (token SIMPEL + profil user) ke localStorage
+   */
+  static setSsoSession(user) {
+    try {
+      localStorage.setItem("user_data", JSON.stringify(user));
+    } catch (error) {
+      console.error("Failed to set SSO session:", error);
+      throw new Error("Failed to save login session");
+    }
+  }
+
+  /** @deprecated Gunakan setSsoSession atau establishSsoSession */
   static setUserSession(user) {
-    console.warn("[AuthManager] setUserSession deprecated — gunakan setSession via SSO exchange");
     try {
       localStorage.setItem("user_data", JSON.stringify(user));
     } catch (error) {
@@ -162,10 +186,21 @@ if (typeof window !== "undefined") {
   supabase.auth.onAuthStateChange((_event, session) => {
     const user = AuthManager.mapUserFromSession(session);
     if (user) {
-      localStorage.setItem("user_data", JSON.stringify(user));
-    } else {
-      localStorage.removeItem("user_data");
+      const existing = AuthManager.getUserSession();
+      localStorage.setItem(
+        "user_data",
+        JSON.stringify({
+          ...user,
+          permissions:
+            user.permissions?.length
+              ? user.permissions
+              : existing?.permissions || [],
+          access_token: existing?.access_token,
+          refresh_token: existing?.refresh_token,
+        }),
+      );
     }
+    // JANGAN hapus cache jika tidak ada Supabase session (karena user pakai SSO dari SIMPEL!)
   });
 }
 
