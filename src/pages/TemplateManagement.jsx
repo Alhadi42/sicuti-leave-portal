@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import {
   FileText,
@@ -33,8 +33,8 @@ import { useToast } from "@/components/ui/use-toast";
 import { extractPdfFormFields } from "@/utils/pdfTemplates";
 import { extractDocxVariables, validateDocxFile } from "@/utils/docxTemplates";
 import { Link } from "react-router-dom";
-import { AuthManager } from "@/auth/AuthManager";
-import { supabase } from "@/supabase/supabaseClient";
+import { AuthManager } from "@/lib/auth";
+import { supabase } from "@/lib/supabaseClient";
 
 const TemplateManagement = () => {
   // State management
@@ -360,7 +360,8 @@ const TemplateManagement = () => {
   const handleEditTemplate = (template) => {
     setTemplateName(template.name);
     setTemplateDescription(template.description || "");
-    setTemplateContent(template.content);
+    // Use template_data from Supabase, fallback to content for localStorage templates
+    setTemplateContent(template.template_data || template.content);
     setCurrentTemplateId(template.id);
     setIsEditMode(true);
     setIsSaveDialogOpen(true);
@@ -416,7 +417,7 @@ const TemplateManagement = () => {
 
       // Update local state
       const updatedTemplates = templates.filter((t) => t.id !== templateId);
-      setSavedTemplates(updatedTemplates);
+        setTemplates(updatedTemplates);
 
       if (selectedTemplate?.id === templateId) {
         setSelectedTemplate(null);
@@ -504,7 +505,7 @@ const TemplateManagement = () => {
             <input
               id="template-upload"
               type="file"
-              accept=".pdf,application/pdf"
+              accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
               className="hidden"
               onChange={handleFileUpload}
               disabled={isLoading}

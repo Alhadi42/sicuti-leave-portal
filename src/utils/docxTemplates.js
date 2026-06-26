@@ -293,6 +293,7 @@ export const processDocxTemplate = async (
   return new Promise((resolve, reject) => {
     try {
       console.log("=== PROCESSING DOCX TEMPLATE ===");
+      console.log("Template received:", template);
       console.log("Variables provided:", Object.keys(variables));
       console.log("Total variables count:", Object.keys(variables).length);
 
@@ -314,27 +315,54 @@ export const processDocxTemplate = async (
         console.log("Sample indexed variables:", indexedVars.slice(0, 5));
       }
 
-      // Get docx data from template object
+      // Get docx data from template object (handle Supabase template_data or content)
       let docxData = template;
-      if (typeof template === 'object') {
+      if (typeof template === "object") {
+        // If template is from database, use template_data, or content
         docxData = template.template_data || template.content;
+        // If template.content is an object with .data property (from localStorage), use that
+        if (docxData && typeof docxData === "object" && docxData.data) {
+          docxData = docxData.data;
+        }
       }
-      
+
+      console.log("Extracted docxData:", typeof docxData, docxData);
+
       if (!docxData) {
         throw new Error("Template tidak memiliki konten DOCX");
       }
 
-      const base64Data = typeof docxData === 'string' && docxData.includes(",")
-        ? docxData.split(",")[1]
-        : docxData;
+      // Process the docxData
+      let arrayBuffer;
+      
+      if (typeof docxData === "string") {
+        // Handle base64 string (with or without data: prefix)
+        let base64Data = docxData;
+        if (base64Data.includes(",")) {
+          base64Data = base64Data.split(",")[1];
+        }
+        console.log("base64Data to decode (first 100 chars):", base64Data.substring(0, 100));
         
-      if (!base64Data) {
-        throw new Error("Konten template tidak valid");
+        try {
+          const byteCharacters = atob(base64Data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          arrayBuffer = new Uint8Array(byteNumbers).buffer;
+        } catch (base64Error) {
+          console.error("Error decoding base64:", base64Error);
+          throw new Error("Format konten template DOCX tidak valid (base64 decode gagal)");
+        }
+      } else if (docxData instanceof ArrayBuffer) {
+        arrayBuffer = docxData;
+      } else if (docxData instanceof Uint8Array) {
+        arrayBuffer = docxData.buffer;
+      } else {
+        throw new Error("Format konten template tidak didukung");
       }
-        
-      const arrayBuffer = Uint8Array.from(atob(base64Data), (c) =>
-        c.charCodeAt(0),
-      ).buffer;
+      
+      console.log("ArrayBuffer created successfully, processing with PizZip...");
 
       const zip = new PizZip(arrayBuffer);
 
