@@ -178,6 +178,13 @@ export const ensureLeaveBalance = async (supabase, employeeId, leaveTypeId, year
 
           if (!updateError && updatedBalance) {
             return updatedBalance;
+          } else {
+            // If update fails, return existing balance with updated deferred_days
+            console.warn('Could not update leave balance, returning modified existing balance:', updateError);
+            return {
+              ...existingBalance,
+              deferred_days: desiredDeferred,
+            };
           }
         }
       }
@@ -207,7 +214,7 @@ export const ensureLeaveBalance = async (supabase, employeeId, leaveTypeId, year
     }
   }
 
-  // Create new balance record
+  // Create new balance record (if possible)
   const { data: newBalance, error: insertError } = await supabase
     .from('leave_balances')
     .insert({
@@ -222,7 +229,19 @@ export const ensureLeaveBalance = async (supabase, employeeId, leaveTypeId, year
     .single();
 
   if (insertError) {
-    throw insertError;
+    // If insert fails (e.g., employee doesn't have write access), return a virtual balance
+    console.warn('Could not create leave balance, returning virtual balance:', insertError);
+    return {
+      id: null,
+      employee_id: employeeId,
+      leave_type_id: leaveTypeId,
+      year: yearNum,
+      total_days: leaveType.default_days || 0,
+      used_days: 0,
+      deferred_days: deferredDays,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
   }
 
   return newBalance;
