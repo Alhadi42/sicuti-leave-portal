@@ -80,22 +80,25 @@ async function enrichUserFromSimpel(userId, email) {
   ]);
 
   const nip = extractNip(email, profile?.nip);
+  let simpelEmployee = null;
   let employeeId = null;
 
   if (nip) {
     const { data: emp } = await simpelAdmin
       .from("employees")
-      .select("id")
+      .select("id, nip, name, department, position_name, rank_group")
       .eq("nip", nip)
       .maybeSingle();
+    simpelEmployee = emp;
     employeeId = emp?.id ?? null;
   }
   if (!employeeId) {
     const { data: emp } = await simpelAdmin
       .from("employees")
-      .select("id")
+      .select("id, nip, name, department, position_name, rank_group")
       .eq("id", userId)
       .maybeSingle();
+    simpelEmployee = emp;
     employeeId = emp?.id ?? null;
   }
 
@@ -104,7 +107,41 @@ async function enrichUserFromSimpel(userId, email) {
     role: roleRow?.role || "employee",
     nip,
     employeeId,
+    simpelEmployee,
   };
+}
+
+/**
+ * Upsert pegawai ke DB SiCuti (by NIP) dan kembalikan ID lokal untuk RLS leave_requests.
+ */
+async function ensureLocalEmployeeId(sicutiAdmin, nip, profile, simpelEmployee, department) {
+  if (!nip) return null;
+
+  const row = {
+    nip: String(nip).trim(),
+    name: simpelEmployee?.name || profile?.full_name || "Pegawai",
+    department: simpelEmployee?.department || profile?.department || department || null,
+    position_name: simpelEmployee?.position_name || profile?.position_name || null,
+    rank_group: simpelEmployee?.rank_group || profile?.rank_group || null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await sicutiAdmin
+    .from("employees")
+    .upsert(row, { onConflict: "nip" })
+    .select("id")
+    .single();
+
+  if (error) {
+    const { data: existing } = await sicutiAdmin
+      .from("employees")
+      .select("id")
+      .eq("nip", row.nip)
+      .maybeSingle();
+    return existing?.id ?? null;
+  }
+
+  return data?.id ?? null;
 }
 
 async function provisionSicutiUser(user) {
@@ -191,13 +228,15 @@ async function provisionSicutiUser(user) {
  * Core SSO exchange — dipakai Vercel API route (same-origin, no CORS)
  */
 export async function exchangeSsoCredentials(body) {
-  const { code, access_token } = body ?? {};
+  const { code, access_token, refresh_token } = body ?? {};
 
   let simpelAccessToken = access_token;
+  let simpelRefreshToken = refresh_token || "";
 
   if (code) {
     const redeemed = await redeemCode(code);
     simpelAccessToken = redeemed.access_token;
+    simpelRefreshToken = redeemed.refresh_token || "";
   }
 
   if (!simpelAccessToken) {
@@ -205,19 +244,40 @@ export async function exchangeSsoCredentials(body) {
   }
 
   const simpelUser = await validateSimpelToken(simpelAccessToken);
-  const { profile, role, nip, employeeId } = await enrichUserFromSimpel(
+  const { profile, role, nip, employeeId, simpelEmployee } = await enrichUserFromSimpel(
     simpelUser.id,
     simpelUser.email,
   );
 
+  const meta = simpelUser.user_metadata || {};
+  const department = profile?.department || meta.department || "Belum Ditetapkan";
+
+  let localEmployeeId = null;
+  const sicutiUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const sicutiServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (sicutiUrl && sicutiServiceKey) {
+    const sicutiAdmin = createClient(sicutiUrl, sicutiServiceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    localEmployeeId = await ensureLocalEmployeeId(
+      sicutiAdmin,
+      nip,
+      profile,
+      simpelEmployee,
+      department,
+    );
+  }
+
   const ssoUser = {
     id: simpelUser.id,
     email: simpelUser.email,
-    name: profile?.full_name || simpelUser.user_metadata?.full_name || simpelUser.email,
+    name: profile?.full_name || meta.full_name || simpelUser.email,
     role,
-    department: profile?.department || "Belum Ditetapkan",
+    department,
     nip,
-    employee_id: employeeId,
+    employee_id: localEmployeeId,
     permissions: permissionsForRole(role),
   };
 
@@ -229,6 +289,10 @@ export async function exchangeSsoCredentials(body) {
       access_token: session.access_token,
       refresh_token: session.refresh_token,
       expires_at: session.expires_at ?? 0,
+    },
+    simpel_session: {
+      access_token: simpelAccessToken,
+      refresh_token: simpelRefreshToken,
     },
     provider: "simpel",
   };
