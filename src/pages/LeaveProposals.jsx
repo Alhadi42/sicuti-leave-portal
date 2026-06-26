@@ -256,6 +256,21 @@ const LeaveProposals = () => {
     finally { setSubmitting(false); }
   };
 
+  const handleDeleteProposal = async (proposal) => {
+    const statusLabels = {
+      pending: "usulan cuti yang masuk",
+      rejected: "usulan cuti yang ditolak",
+      processed: "usulan cuti yang siap dibuatkan surat",
+    };
+    const label = statusLabels[proposal.status] || "usulan cuti";
+
+    if (!window.confirm(`Hapus ${label} "${proposal.proposal_title}"? Tindakan ini tidak dapat dibatalkan.`)) {
+      return;
+    }
+
+    await deleteProposal(proposal.id);
+  };
+
   const handlePrintApprovedLetter = async (proposal) => {
     try {
       toast({ title: "Menyiapkan dokumen...", description: "Mohon tunggu sebentar." });
@@ -788,7 +803,7 @@ const LeaveProposals = () => {
                       setEditingProposal(proposal);
                       setShowCreateForm(true);
                     }}
-                    onDelete={deleteProposal}
+                    onDelete={handleDeleteProposal}
                   />
                 ))}
               </div>
@@ -1035,6 +1050,9 @@ function ProposalCard({ proposal, isEmployee, isAdminUnit, activeTab, onApprove,
   const canPrint = isEmployeeApprovalTab && proposal.status === "approved";
   const canCreateLetter = isCreateLettersTab && proposal.status === "processed";
   const canEditOrDelete = isEmployee && proposal.status === "rejected";
+  const canDeleteByAdminUnit =
+    isAdminUnit && ["pending", "rejected", "processed"].includes(proposal.status);
+  const canDelete = canEditOrDelete || canDeleteByAdminUnit;
 
   return (
     <div className="p-4 bg-slate-700/30 rounded-lg border border-slate-600/50 hover:bg-slate-700/50 transition-colors">
@@ -1076,7 +1094,7 @@ function ProposalCard({ proposal, isEmployee, isAdminUnit, activeTab, onApprove,
         </div>
 
         {/* Action buttons */}
-        {(canAct || canPrint || canEditOrDelete || canCreateLetter) && (
+        {(canAct || canPrint || canEditOrDelete || canCreateLetter || canDelete) && (
           <div className="flex items-center gap-2">
             {canPrint && (
               <Button size="sm" variant="outline" onClick={() => onPrint(proposal)}
@@ -1119,10 +1137,12 @@ function ProposalCard({ proposal, isEmployee, isAdminUnit, activeTab, onApprove,
                   className="border-slate-600 text-slate-300 hover:bg-slate-700">
                   <Edit className="w-4 h-4 mr-1" /> Edit
                 </Button>
-                <Button size="sm" variant="destructive" onClick={() => onDelete(proposal.id)}>
-                  <Trash2 className="w-4 h-4 mr-1" /> Hapus
-                </Button>
               </>
+            )}
+            {canDelete && (
+              <Button size="sm" variant="destructive" onClick={() => onDelete(proposal)}>
+                <Trash2 className="w-4 h-4 mr-1" /> Hapus
+              </Button>
             )}
           </div>
         )}

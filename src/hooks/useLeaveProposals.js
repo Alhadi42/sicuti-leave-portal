@@ -549,6 +549,32 @@ export const useLeaveProposals = () => {
         throw new Error("User not authenticated");
       }
 
+      const { data: proposal, error: proposalFetchError } = await supabase
+        .from("leave_proposals")
+        .select("id, status, proposed_by, proposer_unit")
+        .eq("id", proposalId)
+        .maybeSingle();
+
+      if (proposalFetchError) throw proposalFetchError;
+      if (!proposal) throw new Error("Pengajuan cuti tidak ditemukan.");
+
+      const adminUnitAllowedStatuses = ["pending", "rejected", "processed"];
+      const possibleEmployeeIds = currentUser.role === "employee"
+        ? await getPossibleEmployeeIdsForCurrentUser(currentUser)
+        : [];
+      const isOwnRejectedEmployeeProposal =
+        currentUser.role === "employee" &&
+        proposal.status === "rejected" &&
+        [currentUser.id, ...possibleEmployeeIds].includes(proposal.proposed_by);
+      const isAllowedAdminUnitDelete =
+        currentUser.role === "admin_unit" &&
+        proposal.proposer_unit === currentUser.department &&
+        adminUnitAllowedStatuses.includes(proposal.status);
+
+      if (!isOwnRejectedEmployeeProposal && !isAllowedAdminUnitDelete) {
+        throw new Error("Anda tidak memiliki izin untuk menghapus pengajuan cuti ini.");
+      }
+
       // Delete proposal items first
       const { error: itemsError } = await supabase
         .from("leave_proposal_items")
