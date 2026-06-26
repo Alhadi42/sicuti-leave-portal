@@ -147,7 +147,7 @@ export const useLeaveProposals = () => {
       };
 
       if (status === 'approved') {
-        updateData.approved_by = currentUser.id;
+        // Don't set approved_by due to foreign key constraint with SIMPLE SSO
         updateData.approved_date = new Date().toISOString();
       }
 
@@ -233,7 +233,7 @@ export const useLeaveProposals = () => {
       // 2. Build update data
       const updateData = {
         status: finalStatus,
-        approved_by: currentUser.id,
+        // Don't set approved_by due to foreign key constraint with SIMPLE SSO
         approved_date: new Date().toISOString(),
         notes: approvalData.notes || "",
       };
@@ -335,7 +335,7 @@ export const useLeaveProposals = () => {
         .update({
           status: 'forwarded',
           notes: forwardNote || undefined,
-          forwarded_by: currentUser.id,
+          // Don't set forwarded_by due to foreign key constraint with SIMPLE SSO
           forwarded_date: new Date().toISOString(),
         })
         .eq("id", proposalId);
