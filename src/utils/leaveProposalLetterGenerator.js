@@ -480,11 +480,8 @@ export const generateLeaveProposalLetter = async (proposalData) => {
       ],
     });
 
-    // Generate the document as blob
-    const buffer = await Packer.toBuffer(doc);
-    const blob = new Blob([buffer], {
-      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    });
+    // Generate the document as blob (browser-friendly)
+    const blob = await Packer.toBlob(doc);
 
     console.log("Leave proposal letter generated successfully");
     return blob;
