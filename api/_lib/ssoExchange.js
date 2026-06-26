@@ -100,12 +100,13 @@ async function enrichUserFromSimpel(userId, email) {
 }
 
 /**
- * Upsert pegawai ke DB SiCuti (by NIP) dan kembalikan ID lokal untuk RLS leave_requests.
+ * Upsert pegawai ke DB SiCuti (by NIP) dan gunakan ID EMPLOYEE DARI SIMPEL (agar foreign key work).
  */
-async function ensureLocalEmployeeId(sicutiAdmin, nip, profile, simpelEmployee, department) {
-  if (!nip) return null;
+async function ensureLocalEmployeeId(sicutiAdmin, nip, profile, simpelEmployee, department, simpelEmployeeId) {
+  if (!simpelEmployeeId && !nip) return null;
 
   const row = {
+    id: simpelEmployeeId, // PENTING: Gunakan ID dari SIMPEL agar foreign key di leave_balances dll bekerja!
     nip: String(nip).trim(),
     name: simpelEmployee?.name || profile?.full_name || "Pegawai",
     department: simpelEmployee?.department || profile?.department || department || null,
@@ -121,15 +122,17 @@ async function ensureLocalEmployeeId(sicutiAdmin, nip, profile, simpelEmployee, 
     .single();
 
   if (error) {
+    console.error("[ensureLocalEmployeeId] error upserting employee:", error);
+    // Jika gagal upsert, coba cari employee yang sudah ada dengan nip atau id
     const { data: existing } = await sicutiAdmin
       .from("employees")
       .select("id")
-      .eq("nip", row.nip)
+      .or(`nip.eq.${row.nip},id.eq.${simpelEmployeeId}`)
       .maybeSingle();
-    return existing?.id ?? null;
+    return existing?.id ?? simpelEmployeeId;
   }
 
-  return data?.id ?? null;
+  return data?.id ?? simpelEmployeeId;
 }
 
 /**
@@ -177,6 +180,7 @@ export async function exchangeSsoCredentials(body) {
       profile,
       simpelEmployee,
       department,
+      employeeId, // PENTING: Kirim ID employee dari SIMPEL
     );
   }
 
