@@ -111,7 +111,6 @@ const LeaveRequests = () => {
         .select(
           `
           *,
-          proposal_id,
           employees:employee_id!inner (id, name, nip, department, rank_group),
           leave_types!inner (id, name)
         `
@@ -286,16 +285,20 @@ const LeaveRequests = () => {
   };
 
   const handleDeleteRequest = async (requestId) => {
+    const requestToDelete = leaveRequests.find((r) => r.id === requestId);
+    const hasProposalId = requestToDelete && 'proposal_id' in requestToDelete;
+    
     if (
       !window.confirm(
-        "Apakah Anda yakin ingin menghapus data cuti ini? Saldo cuti pegawai akan dikembalikan dan usulan cuti terkait juga akan dihapus."
+        hasProposalId && requestToDelete.proposal_id
+          ? "Apakah Anda yakin ingin menghapus data cuti ini? Saldo cuti pegawai akan dikembalikan dan usulan cuti terkait juga akan dihapus."
+          : "Apakah Anda yakin ingin menghapus data cuti ini? Saldo cuti pegawai akan dikembalikan."
       )
     ) {
       return;
     }
     setIsLoading(true);
     try {
-      const requestToDelete = leaveRequests.find((r) => r.id === requestId);
       if (!requestToDelete) throw new Error("Data cuti tidak ditemukan.");
 
       // First, revert the leave balance
@@ -316,7 +319,7 @@ const LeaveRequests = () => {
         console.error(`Gagal mengembalikan saldo cuti:`, rpcError.message);
 
       // If there's a linked proposal, delete it (items will delete due to ON DELETE CASCADE)
-      if (requestToDelete.proposal_id) {
+      if (hasProposalId && requestToDelete.proposal_id) {
         const { error: proposalDeleteErr } = await supabase
           .from("leave_proposals")
           .delete()
@@ -335,7 +338,9 @@ const LeaveRequests = () => {
 
       toast({
         title: "Berhasil",
-        description: "Data cuti dan usulan terkait berhasil dihapus dan saldo telah dikembalikan.",
+        description: hasProposalId && requestToDelete.proposal_id
+          ? "Data cuti dan usulan terkait berhasil dihapus dan saldo telah dikembalikan."
+          : "Data cuti berhasil dihapus dan saldo telah dikembalikan.",
       });
       fetchLeaveRequests();
     } catch (error) {
