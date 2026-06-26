@@ -292,7 +292,8 @@ export const useLeaveProposals = () => {
       if (!currentUser) throw new Error("User not authenticated");
       if (currentUser.role !== 'admin_unit') throw new Error("Only admin unit can approve employee proposals");
 
-      let finalStatus;
+      let proposalFinalStatus;
+      let itemFinalStatus = "approved";
       if (approvalType === "issue_letter") {
         // 1. For each item in the proposal, insert a record into leave_requests
         for (const item of items) {
@@ -335,15 +336,15 @@ export const useLeaveProposals = () => {
             throw rpcErr;
           }
         }
-        finalStatus = "approved";
+        proposalFinalStatus = "approved";
       } else {
-        // Just approve without issuing letter, mark as processed for batch letter
-        finalStatus = "processed";
+        // Just approve without issuing letter, mark proposal as processed for batch letter
+        proposalFinalStatus = "processed";
       }
 
       // 2. Build update data
       const updateData = {
-        status: finalStatus,
+        status: proposalFinalStatus,
         // Don't set approved_by due to foreign key constraint with SIMPLE SSO
         approved_date: new Date().toISOString(),
         notes: approvalData.notes || "",
@@ -366,7 +367,7 @@ export const useLeaveProposals = () => {
       // 3. Update status of proposal items
       const { error: itemsUpdateErr } = await supabase
         .from("leave_proposal_items")
-        .update({ status: finalStatus })
+        .update({ status: itemFinalStatus })
         .eq("proposal_id", proposalId);
 
       if (itemsUpdateErr) throw itemsUpdateErr;
