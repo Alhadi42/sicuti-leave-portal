@@ -25,6 +25,7 @@ import { downloadLeaveProposalLetter } from "@/utils/leaveProposalLetterGenerato
 import { processDocxTemplate } from "@/utils/docxTemplates";
 import { saveAs } from "file-saver";
 import { useTemplates } from "@/hooks/useTemplates";
+import { useSimpelEmployeeData } from "@/hooks/useSimpelEmployees";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import {
@@ -38,6 +39,8 @@ const STATUS_CONFIG = {
   forwarded: { label: "Diteruskan ke Admin Pusat", color: "bg-blue-500/20 text-blue-300 border-blue-500/30", icon: Forward },
   processed: { label: "Siap Buat Surat",     color: "bg-purple-500/20 text-purple-300 border-purple-500/30",   icon: FileText },
 };
+
+const LETTER_ITEMS_PER_PAGE = 25;
 
 function StatusBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
@@ -135,6 +138,10 @@ const LeaveProposals = () => {
   const [leaveTypeClassification, setLeaveTypeClassification] = useState({});
   const [generatingLetter, setGeneratingLetter] = useState(false);
   const [letterSearchTerm, setLetterSearchTerm] = useState("");
+  const [debouncedLetterSearchTerm, setDebouncedLetterSearchTerm] = useState("");
+  const [letterItemsPage, setLetterItemsPage] = useState(1);
+  const [signerSearchTerm, setSignerSearchTerm] = useState("");
+  const [debouncedSignerSearchTerm, setDebouncedSignerSearchTerm] = useState("");
   const [selectedBatchItemIds, setSelectedBatchItemIds] = useState([]);
   const [letterDetails, setLetterDetails] = useState({
     letter_number: "",
@@ -147,6 +154,18 @@ const LeaveProposals = () => {
   const [forwardNote, setForwardNote]       = useState("");
   const [submitting, setSubmitting]         = useState(false);
 
+  const {
+    displayedEmployees: signerOptions,
+    isLoading: loadingSigners,
+  } = useSimpelEmployeeData(
+    debouncedSignerSearchTerm,
+    currentUser?.department || "",
+    "",
+    "",
+    "",
+    1
+  );
+
   // Check table existence
   useEffect(() => {
     supabase.from("leave_proposals").select("id").limit(1)
@@ -154,6 +173,21 @@ const LeaveProposals = () => {
         setTableExists(!(error && error.code === "42P01"));
       });
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedLetterSearchTerm(letterSearchTerm);
+      setLetterItemsPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [letterSearchTerm]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSignerSearchTerm(signerSearchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [signerSearchTerm]);
 
   if (!currentUser || (currentUser.role !== 'admin_unit' && currentUser.role !== 'employee')) {
     return (
@@ -282,6 +316,8 @@ const LeaveProposals = () => {
       letter_date: proposal.letter_date || format(new Date(), "yyyy-MM-dd"),
       signed_by: "",
     });
+    setSignerSearchTerm("");
+    setDebouncedSignerSearchTerm("");
     
     // First, analyze and group leave requests by type
     const leaveTypeGroups = {};
@@ -324,12 +360,16 @@ const LeaveProposals = () => {
 
   const openCrossDateBatchDialog = () => {
     setLetterSearchTerm("");
+    setDebouncedLetterSearchTerm("");
+    setLetterItemsPage(1);
     setSelectedBatchItemIds(readyLetterItems.map((item) => item.id));
     setLetterDetails({
       letter_number: "",
       letter_date: format(new Date(), "yyyy-MM-dd"),
       signed_by: "",
     });
+    setSignerSearchTerm("");
+    setDebouncedSignerSearchTerm("");
   };
 
   const handleOpenSelectedBatchDialog = () => {
@@ -757,7 +797,7 @@ const LeaveProposals = () => {
     }))
   );
   const filteredReadyLetterItems = readyLetterItems.filter((item) => {
-    const search = letterSearchTerm.trim().toLowerCase();
+    const search = debouncedLetterSearchTerm.trim().toLowerCase();
     if (!search) return true;
     return [
       item.employee_name,
@@ -767,6 +807,12 @@ const LeaveProposals = () => {
       item.reason,
     ].some((value) => String(value || "").toLowerCase().includes(search));
   });
+  const totalLetterItemPages = Math.max(1, Math.ceil(filteredReadyLetterItems.length / LETTER_ITEMS_PER_PAGE));
+  const currentLetterItemsPage = Math.min(letterItemsPage, totalLetterItemPages);
+  const paginatedReadyLetterItems = filteredReadyLetterItems.slice(
+    (currentLetterItemsPage - 1) * LETTER_ITEMS_PER_PAGE,
+    currentLetterItemsPage * LETTER_ITEMS_PER_PAGE
+  );
 
   const pendingEmployeeCount = proposals.filter(
     p => p.proposed_by !== currentUser.id && p.proposer_unit === currentUser.department && p.status === 'pending'
@@ -966,7 +1012,7 @@ const LeaveProposals = () => {
                       <div className="p-4 text-sm text-slate-400">Tidak ada data cuti yang cocok dengan pencarian.</div>
                     ) : (
                       <div className="divide-y divide-slate-700/50">
-                        {filteredReadyLetterItems.map((item) => {
+                        {paginatedReadyLetterItems.map((item) => {
                           const checked = selectedBatchItemIds.includes(item.id);
                           return (
                             <label key={item.id} className="flex cursor-pointer items-start gap-3 p-3 hover:bg-slate-800/50">
@@ -1000,6 +1046,34 @@ const LeaveProposals = () => {
                       </div>
                     )}
                   </div>
+                  {filteredReadyLetterItems.length > LETTER_ITEMS_PER_PAGE && (
+                    <div className="mt-3 flex flex-col gap-2 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+                      <span>
+                        Menampilkan {(currentLetterItemsPage - 1) * LETTER_ITEMS_PER_PAGE + 1} - {Math.min(currentLetterItemsPage * LETTER_ITEMS_PER_PAGE, filteredReadyLetterItems.length)} dari {filteredReadyLetterItems.length} data
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setLetterItemsPage((page) => Math.max(1, page - 1))}
+                          disabled={currentLetterItemsPage === 1}
+                          className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                        >
+                          Sebelumnya
+                        </Button>
+                        <span className="text-slate-300">{currentLetterItemsPage} / {totalLetterItemPages}</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setLetterItemsPage((page) => Math.min(totalLetterItemPages, page + 1))}
+                          disabled={currentLetterItemsPage === totalLetterItemPages}
+                          className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                        >
+                          Berikutnya
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 {letterProposalGroups.map((group) => {
                   const totalEmployees = group.proposals.reduce((sum, proposal) => sum + (proposal.total_employees || 0), 0);
@@ -1209,11 +1283,38 @@ const LeaveProposals = () => {
               <div>
                 <Label className="text-slate-300">Penandatangan *</Label>
                 <Input
-                  value={letterDetails.signed_by}
-                  onChange={(event) => setLetterDetails((prev) => ({ ...prev, signed_by: event.target.value }))}
-                  placeholder="Nama penandatangan"
+                  value={signerSearchTerm}
+                  onChange={(event) => {
+                    setSignerSearchTerm(event.target.value);
+                    setLetterDetails((prev) => ({ ...prev, signed_by: event.target.value }));
+                  }}
+                  placeholder="Cari nama atau NIP pegawai SIMPEL..."
                   className="mt-1 bg-slate-700/50 border-slate-600/50 text-white"
                 />
+                <div className="mt-2 max-h-36 overflow-y-auto rounded-md border border-slate-700/50 bg-slate-900/60">
+                  {loadingSigners ? (
+                    <div className="px-3 py-2 text-sm text-slate-400">Mencari pegawai...</div>
+                  ) : signerOptions.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-slate-400">Tidak ada pegawai ditemukan.</div>
+                  ) : (
+                    signerOptions.slice(0, 8).map((employee) => (
+                      <button
+                        key={employee.id}
+                        type="button"
+                        onClick={() => {
+                          setSignerSearchTerm(employee.name || "");
+                          setLetterDetails((prev) => ({ ...prev, signed_by: employee.name || "" }));
+                        }}
+                        className="block w-full border-b border-slate-700/40 px-3 py-2 text-left text-sm text-slate-200 last:border-b-0 hover:bg-slate-700/60"
+                      >
+                        <span className="block font-medium text-white">{employee.name}</span>
+                        <span className="text-xs text-slate-400">
+                          {employee.nip || "-"} • {employee.position_name || "-"}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1254,22 +1355,6 @@ const LeaveProposals = () => {
                       <Download className="w-4 h-4 mr-1" />
                       {generatingLetter ? 'Membuat...' : 'Buat Surat Batch'}
                     </Button>
-                    
-                    <div className="flex-1" />
-                    
-                    {items.map((item) => (
-                      <Button
-                        key={item.id}
-                        size="sm"
-                        variant="outline"
-                        className="border-slate-600 text-slate-300 hover:bg-slate-700"
-                        onClick={() => handleGenerateBatchLetter(leaveType, items, selectedTemplate?.id || availableTemplates[0]?.id, item.id)}
-                        disabled={generatingLetter}
-                      >
-                        <FileText className="w-4 h-4 mr-1" />
-                        {item.employee_name.split(' ')[0]}
-                      </Button>
-                    ))}
                   </div>
                 </div>
               ))}
