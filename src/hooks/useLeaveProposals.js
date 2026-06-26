@@ -190,6 +190,18 @@ export const useLeaveProposals = () => {
         throw new Error("Only master admin and admin unit can update proposal status");
       }
 
+      // Fetch proposal items first if we are approving
+      let proposalItems = [];
+      if (status === 'approved') {
+        const { data: items, error: itemsError } = await supabase
+          .from("leave_proposal_items")
+          .select("*")
+          .eq("proposal_id", proposalId);
+        
+        if (itemsError) throw itemsError;
+        proposalItems = items || [];
+      }
+
       const updateData = {
         status,
         ...data,
@@ -198,6 +210,54 @@ export const useLeaveProposals = () => {
       if (status === 'approved') {
         // Don't set approved_by due to foreign key constraint with SIMPLE SSO
         updateData.approved_date = new Date().toISOString();
+        
+        // Process each item (insert leave request & deduct balance)
+        for (const item of proposalItems) {
+          const leaveRequestData = {
+            employee_id: item.employee_id,
+            leave_type_id: item.leave_type_id,
+            start_date: item.start_date,
+            end_date: item.end_date,
+            days_requested: item.days_requested,
+            reason: item.reason || "",
+            leave_quota_year: item.leave_quota_year,
+            leave_period: item.leave_period || item.leave_quota_year,
+            submitted_date: new Date().toISOString(),
+            address_during_leave: item.address_during_leave || "",
+            application_form_date: item.application_form_date || null,
+            signed_by: data.signed_by || "",
+            leave_letter_number: data.letter_number || "",
+            leave_letter_date: data.letter_date || null,
+          };
+
+          // Insert into leave_requests
+          const { error: insertErr } = await supabase
+            .from("leave_requests")
+            .insert([leaveRequestData]);
+          if (insertErr) throw insertErr;
+
+          // Deduct leave balance using the existing RPC function
+          const { error: rpcErr } = await supabase.rpc(
+            "update_leave_balance_with_splitting",
+            {
+              p_employee_id: item.employee_id,
+              p_leave_type_id: item.leave_type_id,
+              p_requested_year: item.leave_quota_year,
+              p_days: item.days_requested,
+            }
+          );
+          if (rpcErr) {
+            console.error("Error updating balance:", rpcErr);
+            throw rpcErr;
+          }
+          
+          // Also update the item's status
+          const { error: itemUpdateErr } = await supabase
+            .from("leave_proposal_items")
+            .update({ status: 'approved' })
+            .eq("id", item.id);
+          if (itemUpdateErr) throw itemUpdateErr;
+        }
       }
 
       const { error } = await supabase

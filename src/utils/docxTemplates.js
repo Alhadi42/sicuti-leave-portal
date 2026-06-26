@@ -286,7 +286,7 @@ const escapeRegex = (string) => {
  * Browser-compatible version using simplified approach
  */
 export const processDocxTemplate = async (
-  docxData,
+  template,
   variables,
   options = {},
 ) => {
@@ -314,9 +314,24 @@ export const processDocxTemplate = async (
         console.log("Sample indexed variables:", indexedVars.slice(0, 5));
       }
 
-      const base64Data = docxData.includes(",")
+      // Get docx data from template object
+      let docxData = template;
+      if (typeof template === 'object') {
+        docxData = template.template_data || template.content;
+      }
+      
+      if (!docxData) {
+        throw new Error("Template tidak memiliki konten DOCX");
+      }
+
+      const base64Data = typeof docxData === 'string' && docxData.includes(",")
         ? docxData.split(",")[1]
         : docxData;
+        
+      if (!base64Data) {
+        throw new Error("Konten template tidak valid");
+      }
+        
       const arrayBuffer = Uint8Array.from(atob(base64Data), (c) =>
         c.charCodeAt(0),
       ).buffer;
