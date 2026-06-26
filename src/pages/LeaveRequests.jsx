@@ -111,6 +111,7 @@ const LeaveRequests = () => {
         .select(
           `
           *,
+          proposal_id,
           employees:employee_id!inner (id, name, nip, department, rank_group),
           leave_types!inner (id, name)
         `
