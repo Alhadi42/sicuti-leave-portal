@@ -29,6 +29,7 @@ import {
   SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { LeaveDocumentUploader } from "@/components/leave_documents/LeaveDocumentUploader";
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const EmployeeLeaveRequestForm = ({ onSubmit, onCancel, initialData = null }) => {
@@ -51,6 +52,10 @@ const EmployeeLeaveRequestForm = ({ onSubmit, onCancel, initialData = null }) =>
   const [leavePeriod, setLeavePeriod] = useState(currentYear.toString());
   const [appFormDate, setAppFormDate] = useState(new Date().toISOString().split("T")[0]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Document upload state
+  const [proposalItemId, setProposalItemId] = useState(null);
+  const [documentsRefresh, setDocumentsRefresh] = useState(0);
 
   // Populate form with initial data when available
   useEffect(() => {
@@ -64,6 +69,9 @@ const EmployeeLeaveRequestForm = ({ onSubmit, onCancel, initialData = null }) =>
       setLeaveQuotaYear(item.leave_quota_year?.toString() || currentYear.toString());
       setLeavePeriod(item.leave_period?.toString() || currentYear.toString());
       setAppFormDate(item.application_form_date || new Date().toISOString().split("T")[0]);
+      
+      // Set proposal item ID for document upload
+      setProposalItemId(item.id);
     }
   }, [initialData, currentYear]);
 
@@ -273,7 +281,7 @@ const EmployeeLeaveRequestForm = ({ onSubmit, onCancel, initialData = null }) =>
 
     setIsSubmitting(true);
     try {
-      await onSubmit({
+      const result = await onSubmit({
         title: `Pengajuan Cuti - ${profile.name}`,
         notes: reason || "",
         proposer_id: profile.id,
@@ -297,6 +305,11 @@ const EmployeeLeaveRequestForm = ({ onSubmit, onCancel, initialData = null }) =>
           application_form_date: appFormDate,
         }],
       });
+      
+      // Store proposal item ID for document upload
+      if (result && result.leave_proposal_items && result.leave_proposal_items.length > 0) {
+        setProposalItemId(result.leave_proposal_items[0].id);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -529,6 +542,41 @@ const EmployeeLeaveRequestForm = ({ onSubmit, onCancel, initialData = null }) =>
           />
         </div>
       </div>
+
+      {/* ── Upload Dokumen Pendukung ── */}
+      {proposalItemId && (
+        <div className="space-y-3">
+          <div className="border-t border-slate-600 pt-4">
+            <h3 className="text-lg font-semibold text-slate-200 mb-3">Dokumen Pendukung</h3>
+            <p className="text-xs text-slate-400 mb-4">
+              Upload dokumen pendukung untuk pengajuan cuti Anda (opsional).
+              Dokumen akan diunggah ke Google Drive dan dapat diakses oleh Admin Unit.
+            </p>
+          </div>
+
+          <LeaveDocumentUploader
+            leaveProposalItemId={proposalItemId}
+            slot={{
+              code: 'formulir_cuti',
+              label: 'Formulir Permohonan Cuti',
+              required: false,
+            }}
+            readonly={false}
+            onChange={() => setDocumentsRefresh(prev => prev + 1)}
+          />
+
+          <LeaveDocumentUploader
+            leaveProposalItemId={proposalItemId}
+            slot={{
+              code: 'surat_keterangan',
+              label: 'Surat Keterangan Pendukung (jika ada)',
+              required: false,
+            }}
+            readonly={false}
+            onChange={() => setDocumentsRefresh(prev => prev + 1)}
+          />
+        </div>
+      )}
 
       {/* ── Catatan alur ── */}
       <div className="p-3 bg-blue-900/20 border border-blue-700/40 rounded text-xs text-blue-300">
