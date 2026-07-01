@@ -119,6 +119,7 @@ Modal baru untuk menampilkan:
 - [x] Database migration berhasil dijalankan
 - [x] Admin Pusat bisa approve usulan → status jadi `awaiting_letter`
 - [x] Admin Unit bisa approve pengajuan → status jadi `awaiting_letter`
+- [x] Usulan dengan status `awaiting_letter` muncul di tab "Buat Surat Keterangan"
 - [x] Generate surat mengubah status ke `letter_issued`
 - [x] Filter status include semua status baru
 - [x] Statistik cards update dengan benar
@@ -139,6 +140,8 @@ Modal baru untuk menampilkan:
 
 1. `feat: implement new proposal status flow with awaiting_letter and letter_issued`
 2. `fix: update admin unit approval to use awaiting_letter status`
+3. `docs: add documentation for new status flow implementation`
+4. `fix: update create-letters tab filter to include awaiting_letter status`
 
 ## Next Steps (Optional Enhancements)
 
