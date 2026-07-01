@@ -532,18 +532,16 @@ const EmployeeLeaveRequestForm = ({ onSubmit, onCancel, initialData = null }) =>
         
         {/* Upload Dokumen Formulir Cuti */}
         <div>
-          <Label className="text-slate-300 flex items-center gap-2">
+          <Label className="text-slate-300">
             Lampiran Formulir Cuti
-            <Badge variant="outline" className="bg-blue-900/30 text-blue-300 border-blue-600 text-xs">
-              Opsional
-            </Badge>
+            <span className="text-xs text-slate-400 block">(Formulir & dokumen pendukung - Opsional)</span>
           </Label>
           <div className="mt-1">
             <LeaveDocumentUploader
               leaveProposalItemId={proposalItemId}
               slot={{
                 code: 'formulir_cuti',
-                label: 'Formulir Permohonan Cuti',
+                label: 'Formulir Cuti & Dokumen Pendukung',
                 required: false,
               }}
               readonly={!canSubmit}
@@ -573,31 +571,6 @@ const EmployeeLeaveRequestForm = ({ onSubmit, onCancel, initialData = null }) =>
             className="mt-1 bg-slate-700 border-slate-600 text-white"
           />
         </div>
-      </div>
-
-      {/* ── Dokumen Pendukung Tambahan ── */}
-      <div>
-        <Label className="text-slate-300 flex items-center gap-2">
-          Lampiran Dokumen Pendukung Lainnya
-          <Badge variant="outline" className="bg-blue-900/30 text-blue-300 border-blue-600 text-xs">
-            Opsional
-          </Badge>
-        </Label>
-        <div className="mt-1">
-          <LeaveDocumentUploader
-            leaveProposalItemId={proposalItemId}
-            slot={{
-              code: 'surat_keterangan',
-              label: 'Surat Keterangan Pendukung (jika ada)',
-              required: false,
-            }}
-            readonly={!canSubmit}
-            onChange={() => setDocumentsRefresh(prev => prev + 1)}
-          />
-        </div>
-        <p className="text-xs text-slate-400 mt-1">
-          💡 Contoh: Surat keterangan dokter, undangan, atau dokumen pendukung lainnya
-        </p>
       </div>
 
       {/* ── Catatan alur ── */}

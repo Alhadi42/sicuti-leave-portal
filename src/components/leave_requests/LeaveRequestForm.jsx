@@ -1323,49 +1323,26 @@ const LeaveRequestForm = ({
         )}
 
         {/* Lampiran Formulir Cuti */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <div>
-            <Label className="text-slate-300 flex items-center gap-2">
+            <Label className="text-slate-300">
               Lampiran Formulir Cuti
-              <Badge variant="outline" className="bg-blue-900/30 text-blue-300 border-blue-600 text-xs">
-                Opsional
-              </Badge>
+              <span className="text-xs text-slate-400 block">
+                (Formulir & dokumen pendukung - Opsional)
+              </span>
             </Label>
             <div className="mt-1">
               <LeaveDocumentUploader
                 leaveRequestId={leaveRequestId}
                 slot={{
                   code: 'formulir_cuti',
-                  label: 'Formulir Permohonan Cuti',
+                  label: 'Formulir Cuti & Dokumen Pendukung',
                   required: false,
                 }}
                 readonly={false}
                 onChange={() => setDocumentsRefresh(prev => prev + 1)}
               />
             </div>
-          </div>
-          <div>
-            <Label className="text-slate-300 flex items-center gap-2">
-              Lampiran Dokumen Pendukung Lainnya
-              <Badge variant="outline" className="bg-blue-900/30 text-blue-300 border-blue-600 text-xs">
-                Opsional
-              </Badge>
-            </Label>
-            <div className="mt-1">
-              <LeaveDocumentUploader
-                leaveRequestId={leaveRequestId}
-                slot={{
-                  code: 'surat_keterangan',
-                  label: 'Surat Keterangan Pendukung (jika ada)',
-                  required: false,
-                }}
-                readonly={false}
-                onChange={() => setDocumentsRefresh(prev => prev + 1)}
-              />
-            </div>
-            <p className="text-xs text-slate-400 mt-1">
-              💡 Contoh: Surat keterangan dokter, undangan, dll
-            </p>
           </div>
         </div>
 

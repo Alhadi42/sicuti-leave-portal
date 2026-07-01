@@ -219,21 +219,24 @@ export function LeaveDocumentUploader({
   }
 
   return (
-    <div className="rounded-lg border p-3 sm:p-4 space-y-3 bg-card">
-      {/* Header dengan label dan status badge */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          {lockedApproved ? (
-            <Lock className="h-4 w-4 text-green-600" />
-          ) : (
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          )}
-          <Label className="text-sm font-medium">
-            {slot.label}
-            {slot.required && <span className="text-destructive ml-1">*</span>}
-          </Label>
+    <div className="rounded-md border border-slate-600 bg-slate-700 p-3 space-y-3">
+      {/* Locked info */}
+      {lockedApproved && (
+        <div className="rounded bg-green-900/30 p-2 text-xs text-green-300 flex items-center gap-2">
+          <Lock className="h-3 w-3" /> Sudah disetujui sebelumnya — tidak perlu diubah.
         </div>
-        {document && (
+      )}
+
+      {/* Verification note jika ditolak */}
+      {document?.verification_note && verStatus === 'rejected' && (
+        <div className="rounded bg-red-900/30 p-2 text-xs text-red-300">
+          <strong>Catatan verifikasi:</strong> {document.verification_note}
+        </div>
+      )}
+
+      {/* Status badge jika ada dokumen */}
+      {document && (
+        <div className="flex items-center gap-2">
           <Badge
             variant={
               verStatus === 'approved' 
@@ -253,27 +256,13 @@ export function LeaveDocumentUploader({
               ? 'Perlu Diperbaiki' 
               : 'Menunggu Verifikasi'}
           </Badge>
-        )}
-      </div>
-
-      {/* Locked info */}
-      {lockedApproved && (
-        <div className="rounded bg-green-50 dark:bg-green-950/30 p-2 text-xs text-green-700 dark:text-green-300 flex items-center gap-2">
-          <Lock className="h-3 w-3" /> Sudah disetujui sebelumnya — tidak perlu diubah.
-        </div>
-      )}
-
-      {/* Verification note jika ditolak */}
-      {document?.verification_note && verStatus === 'rejected' && (
-        <div className="rounded bg-destructive/10 p-2 text-xs text-destructive">
-          <strong>Catatan verifikasi:</strong> {document.verification_note}
         </div>
       )}
 
       {/* Document info jika sudah ada */}
       {document && (document.drive_view_url || document.external_link) ? (
-        <div className="flex flex-wrap items-center gap-2 rounded bg-muted/40 p-2 text-xs">
-          <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+        <div className="flex flex-wrap items-center gap-2 rounded bg-slate-600/50 p-2 text-xs text-white">
+          <FileText className="h-4 w-4 text-slate-300 flex-shrink-0" />
           <span className="truncate flex-1 min-w-0">
             {document.file_name ?? document.external_link}
           </span>
@@ -281,7 +270,7 @@ export function LeaveDocumentUploader({
             href={document.drive_view_url ?? document.external_link ?? '#'}
             target="_blank"
             rel="noreferrer"
-            className="text-primary hover:underline inline-flex items-center gap-1"
+            className="text-blue-400 hover:text-blue-300 hover:underline inline-flex items-center gap-1"
           >
             <ExternalLink className="h-3 w-3" /> Buka
           </a>
@@ -292,6 +281,7 @@ export function LeaveDocumentUploader({
               variant="ghost" 
               onClick={handleDelete} 
               disabled={deleting}
+              className="h-6 w-6 p-0 text-slate-300 hover:text-white hover:bg-slate-600"
             >
               {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
             </Button>
@@ -318,7 +308,7 @@ export function LeaveDocumentUploader({
               size="sm"
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
-              className="w-full"
+              className="w-full bg-slate-600 border-slate-500 text-white hover:bg-slate-500"
             >
               {uploading ? (
                 <>
@@ -334,13 +324,13 @@ export function LeaveDocumentUploader({
             </Button>
 
             {/* External link input */}
-            <div className="text-xs text-center text-muted-foreground">atau</div>
+            <div className="text-xs text-center text-slate-400">atau</div>
             <div className="flex gap-2">
               <Input
                 value={linkInput}
                 onChange={(e) => setLinkInput(e.target.value)}
                 placeholder="Tempel link Google Drive atau URL lainnya"
-                className="text-xs h-9"
+                className="text-xs h-9 bg-slate-600 border-slate-500 text-white placeholder:text-slate-400"
                 disabled={savingLink}
               />
               <Button 
@@ -349,6 +339,7 @@ export function LeaveDocumentUploader({
                 variant="secondary" 
                 onClick={handleSaveLink}
                 disabled={savingLink || !linkInput.trim()}
+                className="bg-slate-600 hover:bg-slate-500 text-white border-slate-500"
               >
                 {savingLink ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Simpan'}
               </Button>
