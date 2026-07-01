@@ -598,6 +598,13 @@ const LeaveRequestForm = ({
         throw new Error('No user session found. Please login again.');
       }
 
+      // Get auth token: prefer SSO access_token, fallback to Supabase Auth session
+      let token = currentUser.access_token;
+      if (!token) {
+        const { data: sess } = await supabase.auth.getSession();
+        token = sess?.session?.access_token;
+      }
+
       const formData = new FormData();
       formData.append('leave_request_id', requestId);
       formData.append('slot_code', 'formulir_cuti');
@@ -607,8 +614,14 @@ const LeaveRequestForm = ({
 
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/leave-doc-upload`;
       
+      const headers = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const resp = await fetch(url, {
         method: 'POST',
+        headers,
         body: formData,
       });
 

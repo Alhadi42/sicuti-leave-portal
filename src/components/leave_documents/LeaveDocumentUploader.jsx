@@ -100,8 +100,19 @@ export function LeaveDocumentUploader({
       formData.append('slot_label', slot.label);
       formData.append('file', file);
 
-      const { data: sess } = await supabase.auth.getSession();
-      const token = sess.session?.access_token;
+      // Get auth token: prefer SSO access_token from AuthManager, fallback to Supabase Auth
+      const { AuthManager } = await import('@/lib/auth');
+      const currentUser = AuthManager.getUserSession();
+      let token = currentUser?.access_token;
+      if (!token) {
+        const { data: sess } = await supabase.auth.getSession();
+        token = sess?.session?.access_token;
+      }
+      // Also send user_id as fallback for SSO auth in edge function
+      if (currentUser?.id) {
+        formData.append('user_id', currentUser.id);
+      }
+
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/leave-doc-upload`;
       
       const resp = await fetch(url, {
@@ -186,8 +197,14 @@ export function LeaveDocumentUploader({
 
     setDeleting(true);
     try {
-      const { data: sess } = await supabase.auth.getSession();
-      const token = sess.session?.access_token;
+      // Get auth token: prefer SSO access_token from AuthManager, fallback to Supabase Auth
+      const { AuthManager } = await import('@/lib/auth');
+      const currentUser = AuthManager.getUserSession();
+      let token = currentUser?.access_token;
+      if (!token) {
+        const { data: sess } = await supabase.auth.getSession();
+        token = sess?.session?.access_token;
+      }
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/leave-doc-delete`;
       
       const resp = await fetch(url, {
@@ -196,7 +213,10 @@ export function LeaveDocumentUploader({
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ document_id: document.id }),
+        body: JSON.stringify({ 
+          document_id: document.id,
+          ...(currentUser?.id ? { user_id: currentUser.id } : {}),
+        }),
       });
 
       if (!resp.ok) {

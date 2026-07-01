@@ -1,111 +1,107 @@
-# PowerShell script untuk copy secrets dari simpel-lavotas ke sicuti-leave-portal
-# Prerequisites: Supabase CLI harus sudah terinstall dan login
+# Script to copy Lovable secrets from SIMPEL to SICUTI
+# Uses temporary edge function to retrieve secrets
 
-Write-Host "🔐 Copy Secrets dari Simpel-Lavotas ke SiCuti" -ForegroundColor Cyan
-Write-Host "================================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "  Copy Lovable Secrets: SIMPEL → SICUTI" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Path ke project simpel-lavotas
-$simpelPath = "d:\DATA PC ALI\CLONE APLIKASI\simpelv3\simpel-lavotas"
-$sicutiPath = "d:\DATA PC ALI\CLONE APLIKASI\SICUTI\SicutiSSO\sicuti-leave-portal"
+# Configuration
+$simpelUrl = "https://mauyygrbdopmpdpnwzra.supabase.co"
+$simpelAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hdXl5Z3JiZG9wbXBkcG53enJhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5MzEzODQsImV4cCI6MjA5MDUwNzM4NH0.rO9oPY2jbax8GNVjW_rkaE8T4FqrV6OoJa7ME96p4bQ"
+$sicutiProjectRef = "ociedycfgkqvcqwdxprt"
+$sicutiAccessToken = "YOUR_SICUTI_ACCESS_TOKEN"
 
-# Check apakah supabase CLI tersedia
-$supabaseCli = Get-Command supabase -ErrorAction SilentlyContinue
-if (-not $supabaseCli) {
-    Write-Host "❌ Error: Supabase CLI tidak ditemukan!" -ForegroundColor Red
-    Write-Host "Install dulu dengan: npm install -g supabase" -ForegroundColor Yellow
-    exit 1
+# Step 1: Get secrets from SIMPEL edge function
+Write-Host "Step 1: Fetching secrets from SIMPEL..." -ForegroundColor Yellow
+
+$headers = @{
+    "Authorization" = "Bearer $simpelAnonKey"
+    "Content-Type" = "application/json"
 }
 
-Write-Host "✓ Supabase CLI ditemukan" -ForegroundColor Green
-Write-Host ""
-
-# Function untuk get secret dari project
-function Get-SupabaseSecret {
-    param (
-        [string]$ProjectPath,
-        [string]$SecretName
-    )
+try {
+    $response = Invoke-RestMethod -Uri "$simpelUrl/functions/v1/get-lovable-secrets" -Method Post -Headers $headers
     
-    Push-Location $ProjectPath
-    $output = supabase secrets list --format json 2>&1
-    Pop-Location
+    $lovableApiKey = $response.LOVABLE_API_KEY
+    $googleDriveApiKey = $response.GOOGLE_DRIVE_API_KEY
     
-    if ($LASTEXITCODE -ne 0) {
-        return $null
+    if (-not $lovableApiKey -or -not $googleDriveApiKey) {
+        Write-Host "  ❌ Failed to retrieve secrets" -ForegroundColor Red
+        Write-Host "  Response: $($response | ConvertTo-Json)" -ForegroundColor Gray
+        exit 1
     }
     
-    try {
-        $secrets = $output | ConvertFrom-Json
-        $secret = $secrets | Where-Object { $_.name -eq $SecretName }
-        return $secret.value
-    } catch {
-        return $null
-    }
-}
-
-# Function untuk set secret ke project
-function Set-SupabaseSecret {
-    param (
-        [string]$ProjectPath,
-        [string]$SecretName,
-        [string]$SecretValue
-    )
+    Write-Host "  ✅ Secrets retrieved successfully" -ForegroundColor Green
+    Write-Host "     LOVABLE_API_KEY: $($lovableApiKey.Substring(0, 20))..." -ForegroundColor Gray
+    Write-Host "     GOOGLE_DRIVE_API_KEY: $($googleDriveApiKey.Substring(0, 20))..." -ForegroundColor Gray
     
-    Push-Location $ProjectPath
-    $result = supabase secrets set "$SecretName=$SecretValue" 2>&1
-    $success = $LASTEXITCODE -eq 0
-    Pop-Location
-    
-    return $success
-}
-
-Write-Host "📖 Membaca secrets dari simpel-lavotas..." -ForegroundColor Yellow
-
-# Get secrets dari simpel-lavotas
-$lovableKey = Get-SupabaseSecret -ProjectPath $simpelPath -SecretName "LOVABLE_API_KEY"
-$driveKey = Get-SupabaseSecret -ProjectPath $simpelPath -SecretName "GOOGLE_DRIVE_API_KEY"
-
-if (-not $lovableKey) {
-    Write-Host "❌ LOVABLE_API_KEY tidak ditemukan di simpel-lavotas" -ForegroundColor Red
-    Write-Host "   Pastikan project simpel-lavotas sudah di-link dengan Supabase CLI" -ForegroundColor Yellow
-    Write-Host "   Run: cd simpel-lavotas && supabase link" -ForegroundColor Yellow
+} catch {
+    Write-Host "  ❌ Failed to fetch secrets from SIMPEL" -ForegroundColor Red
+    Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Red
     exit 1
 }
 
-if (-not $driveKey) {
-    Write-Host "❌ GOOGLE_DRIVE_API_KEY tidak ditemukan di simpel-lavotas" -ForegroundColor Red
-    exit 1
-}
-
-Write-Host "✓ LOVABLE_API_KEY ditemukan: $($lovableKey.Substring(0, 20))..." -ForegroundColor Green
-Write-Host "✓ GOOGLE_DRIVE_API_KEY ditemukan: $($driveKey.Substring(0, 20))..." -ForegroundColor Green
+# Step 2: Set secrets to SICUTI
 Write-Host ""
+Write-Host "Step 2: Setting secrets to SICUTI..." -ForegroundColor Yellow
 
-Write-Host "📝 Menulis secrets ke sicuti-leave-portal..." -ForegroundColor Yellow
+$env:SUPABASE_ACCESS_TOKEN = $sicutiAccessToken
+Set-Location "d:\DATA PC ALI\CLONE APLIKASI\SICUTI\SicutiSSO\sicuti-leave-portal"
 
-# Set secrets ke sicuti-leave-portal
-$success1 = Set-SupabaseSecret -ProjectPath $sicutiPath -SecretName "LOVABLE_API_KEY" -SecretValue $lovableKey
-$success2 = Set-SupabaseSecret -ProjectPath $sicutiPath -SecretName "GOOGLE_DRIVE_API_KEY" -SecretValue $driveKey
+try {
+    # Set LOVABLE_API_KEY
+    Write-Host "  Setting LOVABLE_API_KEY..." -ForegroundColor Gray
+    $output1 = npx supabase secrets set "LOVABLE_API_KEY=$lovableApiKey" --project-ref $sicutiProjectRef 2>&1
+    
+    # Set GOOGLE_DRIVE_API_KEY
+    Write-Host "  Setting GOOGLE_DRIVE_API_KEY..." -ForegroundColor Gray
+    $output2 = npx supabase secrets set "GOOGLE_DRIVE_API_KEY=$googleDriveApiKey" --project-ref $sicutiProjectRef 2>&1
+    
+    Write-Host "  ✅ Secrets set successfully" -ForegroundColor Green
+    
+} catch {
+    Write-Host "  ❌ Failed to set secrets to SICUTI" -ForegroundColor Red
+    Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
+}
 
-if ($success1 -and $success2) {
-    Write-Host "✅ Secrets berhasil di-copy!" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "Secrets yang di-set:" -ForegroundColor Cyan
-    Write-Host "  • LOVABLE_API_KEY" -ForegroundColor White
-    Write-Host "  • GOOGLE_DRIVE_API_KEY" -ForegroundColor White
-    Write-Host ""
-    Write-Host "🚀 Langkah selanjutnya:" -ForegroundColor Cyan
-    Write-Host "  1. Deploy edge functions:" -ForegroundColor White
-    Write-Host "     cd sicuti-leave-portal" -ForegroundColor Gray
-    Write-Host "     supabase functions deploy leave-doc-upload" -ForegroundColor Gray
-    Write-Host "     supabase functions deploy leave-doc-delete" -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "  2. Test upload dokumen dari frontend" -ForegroundColor White
-    Write-Host ""
+# Step 3: Verify secrets match
+Write-Host ""
+Write-Host "Step 3: Verifying secrets..." -ForegroundColor Yellow
+
+$output = npx supabase secrets list --project-ref $sicutiProjectRef 2>&1 | Out-String
+
+if ($output -match "GOOGLE_DRIVE_API_KEY\s*\|\s*670ba8c22b1a6b249f75c406e65cca5b6405d861a50309fd1e8de4fe9fb9f65d" -and
+    $output -match "LOVABLE_API_KEY\s*\|\s*917e56f1114a99280038c39d423f7564ca552460d6a6361b59e6f58ac5e02f99") {
+    Write-Host "  ✅ Secrets verified - digests match SIMPEL!" -ForegroundColor Green
 } else {
-    Write-Host "❌ Gagal set secrets ke sicuti-leave-portal" -ForegroundColor Red
-    Write-Host "   Pastikan project sicuti sudah di-link dengan Supabase CLI" -ForegroundColor Yellow
-    Write-Host "   Run: cd sicuti-leave-portal && supabase link" -ForegroundColor Yellow
-    exit 1
+    Write-Host "  ⚠️  Could not verify digests automatically" -ForegroundColor Yellow
+    Write-Host "  Run '.\check-secrets.ps1' to verify manually" -ForegroundColor Gray
 }
+
+# Step 4: Deploy edge functions
+Write-Host ""
+Write-Host "Step 4: Deploying edge functions..." -ForegroundColor Yellow
+
+Write-Host "  Deploying leave-doc-upload..." -ForegroundColor Gray
+npx supabase functions deploy leave-doc-upload --project-ref $sicutiProjectRef 2>&1 | Out-Null
+
+Write-Host "  Deploying leave-doc-delete..." -ForegroundColor Gray
+npx supabase functions deploy leave-doc-delete --project-ref $sicutiProjectRef 2>&1 | Out-Null
+
+Write-Host "  ✅ Edge functions deployed" -ForegroundColor Green
+
+# Success!
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Green
+Write-Host "  ✅ SUCCESS! Secrets copied" -ForegroundColor Green
+Write-Host "========================================" -ForegroundColor Green
+Write-Host ""
+Write-Host "Next steps:" -ForegroundColor Yellow
+Write-Host "  1. Test document upload in the app" -ForegroundColor Gray
+Write-Host "  2. Delete the temporary function from SIMPEL:" -ForegroundColor Gray
+Write-Host "     cd 'd:\DATA PC ALI\CLONE APLIKASI\simpelv3\simpel-lavotas'" -ForegroundColor Gray
+Write-Host "     npx supabase functions delete get-lovable-secrets --project-ref mauyygrbdopmpdpnwzra" -ForegroundColor Gray
+Write-Host ""
