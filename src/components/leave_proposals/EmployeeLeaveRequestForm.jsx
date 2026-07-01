@@ -29,6 +29,7 @@ import {
   SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { LeaveDocumentUploader } from "@/components/leave_documents/LeaveDocumentUploader";
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -309,6 +310,12 @@ const EmployeeLeaveRequestForm = ({ onSubmit, onCancel, initialData = null }) =>
       // Store proposal item ID for document upload
       if (result && result.leave_proposal_items && result.leave_proposal_items.length > 0) {
         setProposalItemId(result.leave_proposal_items[0].id);
+        
+        // Show success toast with option to upload documents
+        toast({
+          title: "Pengajuan Cuti Berhasil Dibuat",
+          description: "Anda sekarang dapat melampirkan dokumen pendukung di bawah.",
+        });
       }
     } finally {
       setIsSubmitting(false);
@@ -547,11 +554,18 @@ const EmployeeLeaveRequestForm = ({ onSubmit, onCancel, initialData = null }) =>
       {proposalItemId && (
         <div className="space-y-3">
           <div className="border-t border-slate-600 pt-4">
-            <h3 className="text-lg font-semibold text-slate-200 mb-3">Dokumen Pendukung</h3>
-            <p className="text-xs text-slate-400 mb-4">
-              Upload dokumen pendukung untuk pengajuan cuti Anda (opsional).
-              Dokumen akan diunggah ke Google Drive dan dapat diakses oleh Admin Unit.
-            </p>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold text-slate-200">Dokumen Pendukung</h3>
+              <Badge variant="outline" className="bg-blue-900/30 text-blue-300 border-blue-600">
+                Opsional
+              </Badge>
+            </div>
+            <div className="bg-blue-900/20 border border-blue-700/40 rounded p-3 mb-4">
+              <p className="text-xs text-blue-300">
+                💡 Upload dokumen pendukung untuk pengajuan cuti Anda (opsional).
+                Dokumen akan diunggah ke Google Drive dan dapat diakses oleh Admin Unit untuk verifikasi.
+              </p>
+            </div>
           </div>
 
           <LeaveDocumentUploader
@@ -575,29 +589,47 @@ const EmployeeLeaveRequestForm = ({ onSubmit, onCancel, initialData = null }) =>
             readonly={false}
             onChange={() => setDocumentsRefresh(prev => prev + 1)}
           />
+          
+          <div className="bg-green-900/20 border border-green-700/40 rounded p-3 text-xs text-green-300">
+            ✓ Dokumen telah tersimpan. Anda dapat menutup form ini atau upload dokumen tambahan.
+          </div>
         </div>
       )}
 
       {/* ── Catatan alur ── */}
-      <div className="p-3 bg-blue-900/20 border border-blue-700/40 rounded text-xs text-blue-300">
-        <strong>Alur Pengajuan:</strong> Pengajuan ini akan dikirim ke Admin Unit untuk ditinjau.
-        Admin Unit dapat menyetujui, menolak, atau meneruskan ke Admin Pusat.
-        Status persetujuan dapat dipantau di halaman ini.
-      </div>
+      {!proposalItemId && (
+        <div className="p-3 bg-blue-900/20 border border-blue-700/40 rounded text-xs text-blue-300">
+          <strong>Alur Pengajuan:</strong> Pengajuan ini akan dikirim ke Admin Unit untuk ditinjau.
+          Admin Unit dapat menyetujui, menolak, atau meneruskan ke Admin Pusat.
+          Status persetujuan dapat dipantau di halaman ini.
+        </div>
+      )}
 
       {/* ── Actions ── */}
       <div className="flex justify-end gap-3 pt-2">
-        <Button type="button" variant="outline" onClick={onCancel}
-          className="bg-slate-700 hover:bg-slate-600 border-slate-600 text-white">
-          Batal
-        </Button>
-        <Button
-          type="submit"
-          disabled={isSubmitting || !canSubmit || !leaveTypeId || !startDate || !endDate || daysRequested <= 0}
-          className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
-        >
-          {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Mengirim...</> : "Kirim Pengajuan Cuti"}
-        </Button>
+        {proposalItemId ? (
+          <Button
+            type="button"
+            onClick={onCancel}
+            className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+          >
+            Selesai
+          </Button>
+        ) : (
+          <>
+            <Button type="button" variant="outline" onClick={onCancel}
+              className="bg-slate-700 hover:bg-slate-600 border-slate-600 text-white">
+              Batal
+            </Button>
+            <Button
+              type="submit"
+              disabled={isSubmitting || !canSubmit || !leaveTypeId || !startDate || !endDate || daysRequested <= 0}
+              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+            >
+              {isSubmitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Mengirim...</> : "Kirim Pengajuan Cuti"}
+            </Button>
+          </>
+        )}
       </div>
     </form>
   );
