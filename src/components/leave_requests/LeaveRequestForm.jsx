@@ -280,6 +280,11 @@ const LeaveRequestForm = ({
       const period = initialData.leave_period || initialData.leave_quota_year || new Date().getFullYear();
       setSelectedPeriod(parseInt(period));
 
+      // Set leave request ID for document upload (edit mode)
+      if (initialData.id) {
+        setLeaveRequestId(initialData.id);
+      }
+
       // Then fetch and set employee data
       fetchEmployeeData();
     } else {
@@ -1331,18 +1336,25 @@ const LeaveRequestForm = ({
                 (Formulir & dokumen pendukung - Opsional)
               </span>
             </Label>
-            <div className="mt-1">
-              <LeaveDocumentUploader
-                leaveRequestId={leaveRequestId}
-                slot={{
-                  code: 'formulir_cuti',
-                  label: 'Formulir Cuti & Dokumen Pendukung',
-                  required: false,
-                }}
-                readonly={false}
-                onChange={() => setDocumentsRefresh(prev => prev + 1)}
-              />
-            </div>
+            {!leaveRequestId && !initialData?.id && (
+              <div className="mt-1 p-3 bg-blue-900/20 border border-blue-700/40 rounded-md text-xs text-blue-300">
+                💡 Upload dokumen tersedia setelah data cuti disimpan
+              </div>
+            )}
+            {(leaveRequestId || initialData?.id) && (
+              <div className="mt-1">
+                <LeaveDocumentUploader
+                  leaveRequestId={leaveRequestId || initialData?.id}
+                  slot={{
+                    code: 'formulir_cuti',
+                    label: 'Formulir Cuti & Dokumen Pendukung',
+                    required: false,
+                  }}
+                  readonly={false}
+                  onChange={() => setDocumentsRefresh(prev => prev + 1)}
+                />
+              </div>
+            )}
           </div>
         </div>
 

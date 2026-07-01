@@ -536,18 +536,25 @@ const EmployeeLeaveRequestForm = ({ onSubmit, onCancel, initialData = null }) =>
             Lampiran Formulir Cuti
             <span className="text-xs text-slate-400 block">(Formulir & dokumen pendukung - Opsional)</span>
           </Label>
-          <div className="mt-1">
-            <LeaveDocumentUploader
-              leaveProposalItemId={proposalItemId}
-              slot={{
-                code: 'formulir_cuti',
-                label: 'Formulir Cuti & Dokumen Pendukung',
-                required: false,
-              }}
-              readonly={!canSubmit}
-              onChange={() => setDocumentsRefresh(prev => prev + 1)}
-            />
-          </div>
+          {!proposalItemId && (
+            <div className="mt-1 p-3 bg-blue-900/20 border border-blue-700/40 rounded-md text-xs text-blue-300">
+              💡 Upload dokumen tersedia setelah pengajuan cuti disimpan
+            </div>
+          )}
+          {proposalItemId && (
+            <div className="mt-1">
+              <LeaveDocumentUploader
+                leaveProposalItemId={proposalItemId}
+                slot={{
+                  code: 'formulir_cuti',
+                  label: 'Formulir Cuti & Dokumen Pendukung',
+                  required: false,
+                }}
+                readonly={!canSubmit}
+                onChange={() => setDocumentsRefresh(prev => prev + 1)}
+              />
+            </div>
+          )}
         </div>
       </div>
 
