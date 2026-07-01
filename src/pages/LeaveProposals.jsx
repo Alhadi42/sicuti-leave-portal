@@ -785,7 +785,7 @@ const LeaveProposals = () => {
   const displayProposals = proposals.filter((p) => {
     if (isEmployee) return p.proposed_by === currentUser.id;
     if (activeTab === "my-proposals") return p.proposed_by === currentUser.id;
-    if (activeTab === "create-letters") return ["approved", "processed"].includes(p.status);
+    if (activeTab === "create-letters") return canGenerateLetter(p.status);
     // employee-approvals: proposals from employees in this unit (not created by admin themselves)
     return p.proposed_by !== currentUser.id && p.proposer_unit === currentUser.department;
   });
@@ -820,7 +820,7 @@ const LeaveProposals = () => {
   const pendingEmployeeCount = proposals.filter(
     p => p.proposed_by !== currentUser.id && p.proposer_unit === currentUser.department && p.status === 'pending'
   ).length;
-  const readyForLettersCount = proposals.filter(p => ["approved", "processed"].includes(p.status)).length;
+  const readyForLettersCount = proposals.filter(p => canGenerateLetter(p.status)).length;
   const groupedLetterProposals = displayProposals.reduce((groups, proposal) => {
     const sourceDate = proposal.approved_date || proposal.proposal_date || proposal.created_at;
     const dateKey = format(new Date(sourceDate), "yyyy-MM-dd");
