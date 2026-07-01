@@ -100,14 +100,16 @@ export function LeaveDocumentUploader({
       formData.append('slot_label', slot.label);
       formData.append('file', file);
 
-      // Get auth token: prefer SSO access_token from AuthManager, fallback to Supabase Auth
+      // Get auth token: ONLY use local SiCuti token, DO NOT use SIMPEL token (asymmetric JWT error)
       const { AuthManager } = await import('@/lib/auth');
       const currentUser = AuthManager.getUserSession();
-      let token = currentUser?.access_token;
-      if (!token) {
-        const { data: sess } = await supabase.auth.getSession();
-        token = sess?.session?.access_token;
-      }
+      
+      const { data: sess } = await supabase.auth.getSession();
+      const localToken = sess?.session?.access_token;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      const token = localToken || anonKey;
+      
       // Also send user_id as fallback for SSO auth in edge function
       if (currentUser?.id) {
         formData.append('user_id', currentUser.id);
@@ -117,7 +119,10 @@ export function LeaveDocumentUploader({
       
       const resp = await fetch(url, {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: {
+          'apikey': anonKey,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: formData,
       });
 
@@ -197,20 +202,22 @@ export function LeaveDocumentUploader({
 
     setDeleting(true);
     try {
-      // Get auth token: prefer SSO access_token from AuthManager, fallback to Supabase Auth
+      // Get auth token: ONLY use local SiCuti token, DO NOT use SIMPEL token (asymmetric JWT error)
       const { AuthManager } = await import('@/lib/auth');
       const currentUser = AuthManager.getUserSession();
-      let token = currentUser?.access_token;
-      if (!token) {
-        const { data: sess } = await supabase.auth.getSession();
-        token = sess?.session?.access_token;
-      }
+      
+      const { data: sess } = await supabase.auth.getSession();
+      const localToken = sess?.session?.access_token;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      const token = localToken || anonKey;
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/leave-doc-delete`;
       
       const resp = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'apikey': anonKey,
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ 

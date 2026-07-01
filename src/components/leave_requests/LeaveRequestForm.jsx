@@ -598,12 +598,12 @@ const LeaveRequestForm = ({
         throw new Error('No user session found. Please login again.');
       }
 
-      // Get auth token: prefer SSO access_token, fallback to Supabase Auth session
-      let token = currentUser.access_token;
-      if (!token) {
-        const { data: sess } = await supabase.auth.getSession();
-        token = sess?.session?.access_token;
-      }
+      // Get auth token: ONLY use local SiCuti token, DO NOT use SIMPEL token (asymmetric JWT error)
+      const { data: sess } = await supabase.auth.getSession();
+      const localToken = sess?.session?.access_token;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      const token = localToken || anonKey;
 
       const formData = new FormData();
       formData.append('leave_request_id', requestId);
@@ -614,7 +614,9 @@ const LeaveRequestForm = ({
 
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/leave-doc-upload`;
       
-      const headers = {};
+      const headers = {
+        'apikey': anonKey,
+      };
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
