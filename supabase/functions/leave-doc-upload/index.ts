@@ -106,6 +106,9 @@ Deno.serve(async (req) => {
     
     let userId: string | null = null;
 
+    // Parse form data once
+    const form = await req.formData();
+
     // Try standard Supabase JWT first (for direct Supabase auth users)
     if (auth.startsWith('Bearer ')) {
       const authClient = createClient(supaUrl, supaAnon, {
@@ -121,13 +124,9 @@ Deno.serve(async (req) => {
 
     // If JWT didn't work, try to get user_id from form data (SSO flow)
     if (!userId) {
-      const contentType = req.headers.get('content-type') || '';
-      if (contentType.includes('multipart/form-data')) {
-        const form = await req.formData();
-        const userIdFromForm = form.get('user_id');
-        if (userIdFromForm) {
-          userId = String(userIdFromForm);
-        }
+      const userIdFromForm = form.get('user_id');
+      if (userIdFromForm) {
+        userId = String(userIdFromForm);
       }
     }
 
@@ -137,8 +136,6 @@ Deno.serve(async (req) => {
         message: 'Missing authorization header or user_id'
       }, 401);
     }
-
-    const form = await req.formData();
     const leaveRequestId = form.get('leave_request_id') ? String(form.get('leave_request_id')) : null;
     const leaveProposalItemId = form.get('leave_proposal_item_id') ? String(form.get('leave_proposal_item_id')) : null;
     const slotCode = String(form.get('slot_code') ?? '');
