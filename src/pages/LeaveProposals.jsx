@@ -153,6 +153,9 @@ const LeaveProposals = () => {
   });
 
   const [approvalNotes, setApprovalNotes]   = useState("");
+  const [approvalLetterNumber, setApprovalLetterNumber] = useState("");
+  const [approvalLetterDate, setApprovalLetterDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [approvalSignedBy, setApprovalSignedBy] = useState("");
   const [rejectionReason, setRejectionReason] = useState("");
   const [forwardNote, setForwardNote]       = useState("");
   const [submitting, setSubmitting]         = useState(false);
@@ -233,6 +236,9 @@ const LeaveProposals = () => {
   const openApproveDialog = (proposal) => {
     setTargetProposal(proposal);
     setApprovalNotes("");
+    setApprovalLetterNumber("");
+    setApprovalLetterDate(format(new Date(), "yyyy-MM-dd"));
+    setApprovalSignedBy("");
     setShowApprovalDialog(true);
   };
   const openRejectDialog  = (proposal) => { setTargetProposal(proposal); setRejectionReason(""); setShowRejectDialog(true); };
@@ -243,6 +249,9 @@ const LeaveProposals = () => {
     try {
       await approveEmployeeProposal(targetProposal.id, targetProposal.leave_proposal_items, {
         notes: approvalNotes,
+        letter_number: approvalLetterNumber,
+        letter_date: approvalLetterDate || null,
+        signed_by: approvalSignedBy,
       });
       setShowApprovalDialog(false);
       setTargetProposal(null);
@@ -1161,6 +1170,35 @@ const LeaveProposals = () => {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-slate-300">No. Surat Cuti</Label>
+                <Input
+                  value={approvalLetterNumber}
+                  onChange={e => setApprovalLetterNumber(e.target.value)}
+                  placeholder="Contoh: 800/123/BKD/2026"
+                  className="bg-slate-700/50 border-slate-600/50 mt-1 text-white placeholder:text-slate-500"
+                />
+              </div>
+              <div>
+                <Label className="text-slate-300">Tgl. Surat Cuti</Label>
+                <Input
+                  type="date"
+                  value={approvalLetterDate}
+                  onChange={e => setApprovalLetterDate(e.target.value)}
+                  className="bg-slate-700/50 border-slate-600/50 mt-1 text-white"
+                />
+              </div>
+            </div>
+            <div>
+              <Label className="text-slate-300">Penandatangan</Label>
+              <Input
+                value={approvalSignedBy}
+                onChange={e => setApprovalSignedBy(e.target.value)}
+                placeholder="Nama pejabat penandatangan surat cuti"
+                className="bg-slate-700/50 border-slate-600/50 mt-1 text-white placeholder:text-slate-500"
+              />
+            </div>
             <div>
               <Label className="text-slate-300">Catatan (Opsional)</Label>
               <Textarea
@@ -1168,7 +1206,7 @@ const LeaveProposals = () => {
                 onChange={e => setApprovalNotes(e.target.value)}
                 placeholder="Catatan persetujuan untuk pengajuan ini..."
                 rows={2}
-                className="bg-slate-700/50 border-slate-600/50 mt-1 text-white"
+                className="bg-slate-700/50 border-slate-600/50 mt-1 text-white placeholder:text-slate-500"
               />
             </div>
           </div>
