@@ -114,7 +114,8 @@ const LeaveRequests = () => {
           *,
           proposal_id,
           employees:employee_id!inner (id, name, nip, department, rank_group),
-          leave_types!inner (id, name)
+          leave_types!inner (id, name),
+          leave_documents (id, external_link, drive_view_url)
         `
         )
         .order("submitted_date", { ascending: false });
@@ -181,6 +182,7 @@ const LeaveRequests = () => {
         leave_type_id: req.leave_types.id,
         leaveTypeName: req.leave_types.name,
         approval_status: req.status || "approved",
+        document_link: req.leave_documents?.[0]?.external_link || req.leave_documents?.[0]?.drive_view_url || null,
       }));
 
       if (isEmployeeUser) {
@@ -223,6 +225,7 @@ const LeaveRequests = () => {
               leave_letter_number: proposal.letter_number || "",
               leave_letter_date: proposal.letter_date || null,
               signed_by: "",
+              document_link: item.leave_documents?.[0]?.external_link || item.leave_documents?.[0]?.drive_view_url || null,
             })),
           );
 

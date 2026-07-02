@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle, Clock, FileText, Forward, User, XCircle, Edit2, Trash2 } from 'lucide-react';
+import { CheckCircle, Clock, FileText, Forward, User, XCircle, Edit2, Trash2, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const LeaveRequestCard = ({ request, index, onEdit, onDelete }) => {
@@ -153,6 +153,19 @@ const LeaveRequestCard = ({ request, index, onEdit, onDelete }) => {
               <p className="text-slate-400">Alamat Selama Cuti:</p>
               <p className="text-white font-medium">{request.address_during_leave || '-'}</p>
             </div>
+            {request.document_link && (
+              <div className="md:col-span-2 lg:col-span-3 mt-1">
+                <p className="text-slate-400">Dokumen Lampiran:</p>
+                <a
+                  href={request.document_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-blue-400 hover:text-blue-300 hover:underline mt-0.5 text-sm font-semibold"
+                >
+                  <ExternalLink className="w-4 h-4" /> Buka Link Lampiran Cuti
+                </a>
+              </div>
+            )}
           </div>
           <p className="text-xs text-slate-500 mt-3">Data diinput pada: {formatDate(request.submitted_date)}</p>
         </div>

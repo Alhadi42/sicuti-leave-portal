@@ -175,7 +175,7 @@ export const useLeaveProposals = () => {
 
         const { data: proposalItems, error: itemsError } = await supabase
           .from("leave_proposal_items")
-          .select("*")
+          .select("*, leave_documents (id, external_link, drive_view_url)")
           .in("proposal_id", proposalIds);
 
         if (!itemsError && proposalItems) {
