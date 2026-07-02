@@ -268,8 +268,22 @@ export const useLeaveProposals = () => {
           status: "proposed",
         }));
 
-        const { error: itemsError } = await supabase.from("leave_proposal_items").insert(proposalItems);
+        const { data: insertedItems, error: itemsError } = await supabase
+          .from("leave_proposal_items")
+          .insert(proposalItems)
+          .select();
         if (itemsError) throw itemsError;
+        
+        toast({
+          title: "Success",
+          description: "Usulan/Pengajuan cuti berhasil dibuat",
+        });
+
+        await fetchProposals();
+        return {
+          ...data,
+          leave_proposal_items: insertedItems
+        };
       }
 
       toast({

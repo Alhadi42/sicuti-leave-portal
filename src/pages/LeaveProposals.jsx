@@ -215,7 +215,7 @@ const LeaveProposals = () => {
         setShowCreateForm(false);
       } else {
         // Use the hook's createProposal which already handles inserting items
-        await createProposal(proposalData);
+        const res = await createProposal(proposalData);
         toast({
           title: "Berhasil",
           description: isEmployee
@@ -223,6 +223,7 @@ const LeaveProposals = () => {
             : "Usulan cuti berhasil dibuat",
         });
         setShowCreateForm(false);
+        return res;
       }
     } catch (error) {
       toast({ variant: "destructive", title: editingProposal ? "Gagal Memperbarui Usulan" : "Gagal Membuat Usulan", description: error.message });

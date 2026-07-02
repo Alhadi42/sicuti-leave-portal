@@ -484,8 +484,9 @@ const LeaveRequests = () => {
               {isEmployee ? (
                 <EmployeeLeaveRequestForm
                   onSubmit={async (data) => {
-                    await createProposal(data);
+                    const res = await createProposal(data);
                     onFormSubmitSuccess();
+                    return res;
                   }}
                   onCancel={() => {
                     setIsFormOpen(false);
