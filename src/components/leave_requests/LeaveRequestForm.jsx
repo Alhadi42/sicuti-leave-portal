@@ -650,10 +650,16 @@ const LeaveRequestForm = ({
       if (error) throw error;
       console.log('Document link saved successfully');
     } catch (error) {
-      console.error('Save document link error:', error);
+      console.error('Save document link error details:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+        errorObject: error
+      });
       toast({
         title: 'Gagal menyimpan link dokumen',
-        description: error.message,
+        description: error.message || 'Terjadi kesalahan database',
         variant: 'destructive'
       });
     }
