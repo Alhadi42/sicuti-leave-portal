@@ -146,6 +146,7 @@ const LeaveProposals = () => {
   const [signerSearchTerm, setSignerSearchTerm] = useState("");
   const [debouncedSignerSearchTerm, setDebouncedSignerSearchTerm] = useState("");
   const [selectedBatchItemIds, setSelectedBatchItemIds] = useState([]);
+  const [showLetterEdit, setShowLetterEdit] = useState(false);
   const [letterDetails, setLetterDetails] = useState({
     letter_number: "",
     letter_date: format(new Date(), "yyyy-MM-dd"),
@@ -322,14 +323,37 @@ const LeaveProposals = () => {
     }
   };
 
-  const handleOpenBatchDialog = (proposal) => {
+  const handleOpenBatchDialog = async (proposal) => {
     setSelectedProposalForBatch(proposal);
+
+    // Try to load letter details from leave_requests that were saved during approval
+    let fetchedLetterNumber = proposal.letter_number || "";
+    let fetchedLetterDate = proposal.letter_date || format(new Date(), "yyyy-MM-dd");
+    let fetchedSignedBy = "";
+
+    try {
+      const { data: leaveReqs } = await supabase
+        .from("leave_requests")
+        .select("leave_letter_number, leave_letter_date, signed_by")
+        .eq("proposal_id", proposal.id)
+        .limit(1);
+
+      if (leaveReqs && leaveReqs.length > 0) {
+        const lr = leaveReqs[0];
+        if (lr.leave_letter_number) fetchedLetterNumber = lr.leave_letter_number;
+        if (lr.leave_letter_date) fetchedLetterDate = lr.leave_letter_date;
+        if (lr.signed_by) fetchedSignedBy = lr.signed_by;
+      }
+    } catch (e) {
+      console.warn("Could not fetch letter details from leave_requests:", e);
+    }
+
     setLetterDetails({
-      letter_number: proposal.letter_number || "",
-      letter_date: proposal.letter_date || format(new Date(), "yyyy-MM-dd"),
-      signed_by: "",
+      letter_number: fetchedLetterNumber,
+      letter_date: fetchedLetterDate,
+      signed_by: fetchedSignedBy,
     });
-    setSignerSearchTerm("");
+    setSignerSearchTerm(fetchedSignedBy);
     setDebouncedSignerSearchTerm("");
     
     // First, analyze and group leave requests by type
@@ -368,6 +392,7 @@ const LeaveProposals = () => {
     });
     setSelectedEmployeeForLetter(defaultSelection);
     
+    setShowLetterEdit(false);
     setShowBatchDialog(true);
   };
 
@@ -1303,61 +1328,99 @@ const LeaveProposals = () => {
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
-              <div>
-                <Label className="text-slate-300">No. Surat Cuti *</Label>
-                <Input
-                  value={letterDetails.letter_number}
-                  onChange={(event) => setLetterDetails((prev) => ({ ...prev, letter_number: event.target.value }))}
-                  placeholder="Nomor surat cuti"
-                  className="mt-1 bg-slate-700/50 border-slate-600/50 text-white"
-                />
-              </div>
-              <div>
-                <Label className="text-slate-300">Tgl. Surat Cuti *</Label>
-                <Input
-                  type="date"
-                  value={letterDetails.letter_date}
-                  onChange={(event) => setLetterDetails((prev) => ({ ...prev, letter_date: event.target.value }))}
-                  className="mt-1 bg-slate-700/50 border-slate-600/50 text-white"
-                />
-              </div>
-              <div>
-                <Label className="text-slate-300">Penandatangan *</Label>
-                <Input
-                  value={signerSearchTerm}
-                  onChange={(event) => {
-                    setSignerSearchTerm(event.target.value);
-                    setLetterDetails((prev) => ({ ...prev, signed_by: event.target.value }));
-                  }}
-                  placeholder="Cari nama atau NIP pegawai SIMPEL..."
-                  className="mt-1 bg-slate-700/50 border-slate-600/50 text-white"
-                />
-                <div className="mt-2 max-h-36 overflow-y-auto rounded-md border border-slate-700/50 bg-slate-900/60">
-                  {loadingSigners ? (
-                    <div className="px-3 py-2 text-sm text-slate-400">Mencari pegawai...</div>
-                  ) : signerOptions.length === 0 ? (
-                    <div className="px-3 py-2 text-sm text-slate-400">Tidak ada pegawai ditemukan.</div>
-                  ) : (
-                    signerOptions.slice(0, 8).map((employee) => (
-                      <button
-                        key={employee.id}
-                        type="button"
-                        onClick={() => {
-                          setSignerSearchTerm(employee.name || "");
-                          setLetterDetails((prev) => ({ ...prev, signed_by: employee.name || "" }));
-                        }}
-                        className="block w-full border-b border-slate-700/40 px-3 py-2 text-left text-sm text-slate-200 last:border-b-0 hover:bg-slate-700/60"
-                      >
-                        <span className="block font-medium text-white">{employee.name}</span>
-                        <span className="text-xs text-slate-400">
-                          {employee.nip || "-"} • {employee.position_name || "-"}
-                        </span>
-                      </button>
-                    ))
-                  )}
+            {/* Letter Details - auto-populated from approval phase */}
+            <div className="rounded-lg border border-slate-700/50 bg-slate-900/30 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-emerald-400" />
+                  <Label className="text-slate-200 font-medium">Detail Surat (diisi saat persetujuan)</Label>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setShowLetterEdit(prev => !prev)}
+                  className="text-xs px-2 py-1 rounded bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 transition-colors"
+                >
+                  {showLetterEdit ? "Tutup" : "Edit"}
+                </button>
               </div>
+
+              {!showLetterEdit ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="bg-slate-800/50 rounded-md px-3 py-2">
+                    <p className="text-xs text-slate-400 mb-1">No. Surat Cuti</p>
+                    <p className="text-sm text-white font-medium">{letterDetails.letter_number || <span className="text-amber-400 italic">Belum diisi</span>}</p>
+                  </div>
+                  <div className="bg-slate-800/50 rounded-md px-3 py-2">
+                    <p className="text-xs text-slate-400 mb-1">Tgl. Surat Cuti</p>
+                    <p className="text-sm text-white font-medium">
+                      {letterDetails.letter_date 
+                        ? format(new Date(letterDetails.letter_date), "dd MMMM yyyy", { locale: id }) 
+                        : <span className="text-amber-400 italic">Belum diisi</span>}
+                    </p>
+                  </div>
+                  <div className="bg-slate-800/50 rounded-md px-3 py-2">
+                    <p className="text-xs text-slate-400 mb-1">Penandatangan</p>
+                    <p className="text-sm text-white font-medium">{letterDetails.signed_by || <span className="text-amber-400 italic">Belum diisi</span>}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Label className="text-slate-300">No. Surat Cuti *</Label>
+                    <Input
+                      value={letterDetails.letter_number}
+                      onChange={(event) => setLetterDetails((prev) => ({ ...prev, letter_number: event.target.value }))}
+                      placeholder="Nomor surat cuti"
+                      className="mt-1 bg-slate-700/50 border-slate-600/50 text-white"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-slate-300">Tgl. Surat Cuti *</Label>
+                    <Input
+                      type="date"
+                      value={letterDetails.letter_date}
+                      onChange={(event) => setLetterDetails((prev) => ({ ...prev, letter_date: event.target.value }))}
+                      className="mt-1 bg-slate-700/50 border-slate-600/50 text-white"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-slate-300">Penandatangan *</Label>
+                    <Input
+                      value={signerSearchTerm}
+                      onChange={(event) => {
+                        setSignerSearchTerm(event.target.value);
+                        setLetterDetails((prev) => ({ ...prev, signed_by: event.target.value }));
+                      }}
+                      placeholder="Cari nama atau NIP pegawai SIMPEL..."
+                      className="mt-1 bg-slate-700/50 border-slate-600/50 text-white"
+                    />
+                    <div className="mt-2 max-h-36 overflow-y-auto rounded-md border border-slate-700/50 bg-slate-900/60">
+                      {loadingSigners ? (
+                        <div className="px-3 py-2 text-sm text-slate-400">Mencari pegawai...</div>
+                      ) : signerOptions.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-slate-400">Tidak ada pegawai ditemukan.</div>
+                      ) : (
+                        signerOptions.slice(0, 8).map((employee) => (
+                          <button
+                            key={employee.id}
+                            type="button"
+                            onClick={() => {
+                              setSignerSearchTerm(employee.name || "");
+                              setLetterDetails((prev) => ({ ...prev, signed_by: employee.name || "" }));
+                            }}
+                            className="block w-full border-b border-slate-700/40 px-3 py-2 text-left text-sm text-slate-200 last:border-b-0 hover:bg-slate-700/60"
+                          >
+                            <span className="block font-medium text-white">{employee.name}</span>
+                            <span className="text-xs text-slate-400">
+                              {employee.nip || "-"} • {employee.position_name || "-"}
+                            </span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Leave Type Groups */}
