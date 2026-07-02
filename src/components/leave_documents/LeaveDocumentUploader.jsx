@@ -1,35 +1,22 @@
 /**
  * LeaveDocumentUploader
  * 
- * Komponen untuk upload dokumen cuti ke Google Drive.
- * Mirip dengan DocumentSlotUploader di simpel-lavotas, disesuaikan untuk leave documents.
+ * Komponen untuk melampirkan link dokumen cuti (Google Drive, Dropbox, dll).
  * 
  * Features:
- * - Upload file ke Google Drive via edge function
- * - Support external link sebagai fallback
+ * - Simpan link eksternal (Google Drive, Dropbox, Cloud Storage)
  * - Verification status badges (pending/approved/rejected)
  * - Document locking untuk yang sudah disetujui
- * - Delete dokumen
+ * - Hapus lampiran
  */
 
-import { useRef, useState } from 'react';
-import { Upload, FileText, ExternalLink, X, CheckCircle2, XCircle, Clock, Loader2, Lock } from 'lucide-react';
+import { useState } from 'react';
+import { FileText, ExternalLink, X, CheckCircle2, XCircle, Clock, Loader2, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/supabaseClient';
-
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
-const ALLOWED_FILE_TYPES = [
-  'application/pdf',
-  'image/jpeg',
-  'image/jpg',
-  'image/png',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-];
 
 /**
  * @typedef {Object} DocumentSlot
@@ -68,83 +55,12 @@ export function LeaveDocumentUploader({
   onChange,
 }) {
   const { toast } = useToast();
-  const [uploading, setUploading] = useState(false);
   const [linkInput, setLinkInput] = useState(document?.external_link ?? '');
   const [deleting, setDeleting] = useState(false);
   const [savingLink, setSavingLink] = useState(false);
-  const fileRef = useRef(null);
 
   const verStatus = document?.verification_status ?? 'pending';
   const effectiveReadonly = readonly || lockedApproved;
-
-  async function handleFile(file) {
-    if (file.size > MAX_FILE_SIZE) {
-      toast({ title: 'File terlalu besar (max 20MB)', variant: 'destructive' });
-      return;
-    }
-    if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-      toast({ 
-        title: 'Format file tidak didukung', 
-        description: 'Hanya PDF, JPG, PNG, DOC, DOCX yang diperbolehkan',
-        variant: 'destructive' 
-      });
-      return;
-    }
-
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      if (leaveRequestId) formData.append('leave_request_id', leaveRequestId);
-      if (leaveProposalItemId) formData.append('leave_proposal_item_id', leaveProposalItemId);
-      formData.append('slot_code', slot.code);
-      formData.append('slot_label', slot.label);
-      formData.append('file', file);
-
-      // Get auth token: ONLY use local SiCuti token, DO NOT use SIMPEL token (asymmetric JWT error)
-      const { AuthManager } = await import('@/lib/auth');
-      const currentUser = AuthManager.getUserSession();
-      
-      const { data: sess } = await supabase.auth.getSession();
-      const localToken = sess?.session?.access_token;
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      
-      const token = localToken || anonKey;
-      
-      // Also send user_id as fallback for SSO auth in edge function
-      if (currentUser?.id) {
-        formData.append('user_id', currentUser.id);
-      }
-
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/leave-doc-upload`;
-      
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'apikey': anonKey,
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: formData,
-      });
-
-      if (!resp.ok) {
-        const text = await resp.text();
-        throw new Error(text || `HTTP ${resp.status}`);
-      }
-
-      const result = await resp.json();
-      toast({ title: `Dokumen "${slot.label}" berhasil diunggah` });
-      onChange?.();
-    } catch (error) {
-      console.error('Upload error:', error);
-      toast({ 
-        title: 'Gagal upload', 
-        description: error.message || 'Terjadi kesalahan',
-        variant: 'destructive' 
-      });
-    } finally {
-      setUploading(false);
-    }
-  }
 
   async function handleSaveLink() {
     if (!linkInput.trim()) {
@@ -155,7 +71,7 @@ export function LeaveDocumentUploader({
     try {
       new URL(linkInput.trim());
     } catch {
-      toast({ title: 'URL tidak valid', variant: 'destructive' });
+      toast({ title: 'URL tidak valid. Pastikan diawali dengan http:// atau https://', variant: 'destructive' });
       return;
     }
 
@@ -166,6 +82,7 @@ export function LeaveDocumentUploader({
         slot_label: slot.label,
         external_link: linkInput.trim(),
         verification_status: 'pending',
+        file_name: 'Link Lampiran',
       };
 
       if (leaveRequestId) {
@@ -198,40 +115,19 @@ export function LeaveDocumentUploader({
 
   async function handleDelete() {
     if (!document) return;
-    if (!confirm('Hapus dokumen ini?')) return;
+    if (!confirm('Hapus lampiran ini?')) return;
 
     setDeleting(true);
     try {
-      // Get auth token: ONLY use local SiCuti token, DO NOT use SIMPEL token (asymmetric JWT error)
-      const { AuthManager } = await import('@/lib/auth');
-      const currentUser = AuthManager.getUserSession();
-      
-      const { data: sess } = await supabase.auth.getSession();
-      const localToken = sess?.session?.access_token;
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      
-      const token = localToken || anonKey;
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/leave-doc-delete`;
-      
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': anonKey,
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ 
-          document_id: document.id,
-          ...(currentUser?.id ? { user_id: currentUser.id } : {}),
-        }),
-      });
+      const { error } = await supabase
+        .from('leave_documents')
+        .delete()
+        .eq('id', document.id);
 
-      if (!resp.ok) {
-        const text = await resp.text();
-        throw new Error(text || `HTTP ${resp.status}`);
-      }
+      if (error) throw error;
 
-      toast({ title: 'Dokumen berhasil dihapus' });
+      toast({ title: 'Lampiran berhasil dihapus' });
+      setLinkInput('');
       onChange?.();
     } catch (error) {
       console.error('Delete error:', error);
@@ -291,15 +187,15 @@ export function LeaveDocumentUploader({
         <div className="flex flex-wrap items-center gap-2 rounded bg-slate-600/50 p-2 text-xs text-white">
           <FileText className="h-4 w-4 text-slate-300 flex-shrink-0" />
           <span className="truncate flex-1 min-w-0">
-            {document.file_name ?? document.external_link}
+            {document.external_link ?? document.file_name}
           </span>
           <a
-            href={document.drive_view_url ?? document.external_link ?? '#'}
+            href={document.external_link ?? document.drive_view_url ?? '#'}
             target="_blank"
             rel="noreferrer"
             className="text-blue-400 hover:text-blue-300 hover:underline inline-flex items-center gap-1"
           >
-            <ExternalLink className="h-3 w-3" /> Buka
+            <ExternalLink className="h-3 w-3" /> Buka Link
           </a>
           {!effectiveReadonly && (
             <Button 
@@ -317,46 +213,11 @@ export function LeaveDocumentUploader({
       ) : (
         !effectiveReadonly && (
           <div className="space-y-2">
-            {/* Upload button */}
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleFile(f);
-                e.target.value = '';
-              }}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => fileRef.current?.click()}
-              disabled={uploading}
-              className="w-full bg-slate-600 border-slate-500 text-white hover:bg-slate-500"
-            >
-              {uploading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
-                  Mengunggah ke Drive…
-                </>
-              ) : (
-                <>
-                  <Upload className="mr-2 h-4 w-4" /> 
-                  Upload File ke Google Drive
-                </>
-              )}
-            </Button>
-
-            {/* External link input */}
-            <div className="text-xs text-center text-slate-400">atau</div>
             <div className="flex gap-2">
               <Input
                 value={linkInput}
                 onChange={(e) => setLinkInput(e.target.value)}
-                placeholder="Tempel link Google Drive atau URL lainnya"
+                placeholder="Tempel link Google Drive / Dropbox / Cloud Storage"
                 className="text-xs h-9 bg-slate-600 border-slate-500 text-white placeholder:text-slate-400"
                 disabled={savingLink}
               />
