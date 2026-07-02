@@ -48,13 +48,11 @@ CREATE INDEX idx_leave_documents_proposal_item ON public.leave_documents(leave_p
 CREATE INDEX idx_leave_documents_uploaded_by ON public.leave_documents(uploaded_by_id);
 
 -- Grants
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.leave_documents TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.leave_documents TO authenticated, anon;
 GRANT ALL ON public.leave_documents TO service_role;
 
--- Enable RLS
-ALTER TABLE public.leave_documents ENABLE ROW LEVEL SECURITY;
-
--- RLS Policies
+-- Disable RLS
+ALTER TABLE public.leave_documents DISABLE ROW LEVEL SECURITY;
 
 -- Admin pusat can access all documents
 CREATE POLICY "Admin pusat all access leave_documents"
