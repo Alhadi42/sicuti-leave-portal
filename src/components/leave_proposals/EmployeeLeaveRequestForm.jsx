@@ -19,7 +19,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { countWorkingDays, fetchNationalHolidaysFromDB } from "@/utils/workingDays";
 import { calculateLeaveBalance, ensureLeaveBalance } from "@/utils/leaveBalanceCalculator";
 import { attachSicutiEmployeeIds, resolveSicutiEmployeeIds } from "@/utils/sicutiEmployeeResolver";
-import { Loader2, AlertTriangle, Upload, FileText, X } from "lucide-react";
+import { Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,7 +30,6 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { LeaveDocumentUploader } from "@/components/leave_documents/LeaveDocumentUploader";
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const EmployeeLeaveRequestForm = ({ onSubmit, onCancel, initialData = null }) => {
@@ -54,11 +53,10 @@ const EmployeeLeaveRequestForm = ({ onSubmit, onCancel, initialData = null }) =>
   const [appFormDate, setAppFormDate] = useState(new Date().toISOString().split("T")[0]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Document upload state
+  // Document link state
   const [proposalItemId, setProposalItemId] = useState(null);
   const [documentsRefresh, setDocumentsRefresh] = useState(0);
-  const [uploadedFile, setUploadedFile] = useState(null);
-  const [filePreview, setFilePreview] = useState(null);
+  const [documentLink, setDocumentLink] = useState('');
 
   // Populate form with initial data when available
   useEffect(() => {
@@ -263,71 +261,44 @@ const EmployeeLeaveRequestForm = ({ onSubmit, onCancel, initialData = null }) =>
   }, [profile?.id, selectedLeaveType, leavePeriod, currentYear]);
 
   // ── Helper functions ───────────────────────────────────────────────────────
-  const uploadDocument = async (proposalItemId, file) => {
+  const saveDocumentLink = async (proposalItemId) => {
     try {
+      const trimmedLink = documentLink.trim();
+      if (!trimmedLink) return;
+
+      try {
+        new URL(trimmedLink);
+      } catch {
+        throw new Error('Format URL tidak valid. Pastikan diawali dengan http:// atau https://');
+      }
+
       const currentUser = AuthManager.getUserSession();
-      if (!currentUser?.id) {
-        throw new Error('No user session found. Please login again.');
-      }
+      const docData = {
+        leave_proposal_item_id: proposalItemId,
+        slot_code: 'formulir_cuti',
+        slot_label: 'Formulir Cuti & Dokumen Pendukung',
+        external_link: trimmedLink,
+        file_name: 'Link Lampiran',
+        verification_status: 'pending',
+        uploaded_by_id: currentUser?.id || null,
+      };
 
-      const formData = new FormData();
-      formData.append('leave_proposal_item_id', proposalItemId);
-      formData.append('slot_code', 'formulir_cuti');
-      formData.append('slot_label', 'Formulir Cuti & Dokumen Pendukung');
-      formData.append('file', file);
-      formData.append('user_id', currentUser.id); // Send user_id for SSO auth
+      const { error } = await supabase
+        .from('leave_documents')
+        .upsert(docData, {
+          onConflict: 'leave_proposal_item_id,slot_code',
+        });
 
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/leave-doc-upload`;
-      
-      const resp = await fetch(url, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!resp.ok) {
-        const text = await resp.text();
-        throw new Error(text || `HTTP ${resp.status}`);
-      }
-
-      console.log('Document uploaded successfully');
-      
-      toast({
-        title: 'Berhasil',
-        description: 'Dokumen berhasil diupload',
-      });
+      if (error) throw error;
+      console.log('Document link saved successfully');
     } catch (error) {
-      console.error('Upload document error:', error);
+      console.error('Save document link error:', error);
       toast({
-        title: 'Dokumen gagal diupload',
-        description: 'Pengajuan cuti berhasil, tapi dokumen gagal diupload. Anda bisa upload ulang nanti.',
+        title: 'Gagal menyimpan link dokumen',
+        description: error.message,
         variant: 'destructive'
       });
     }
-  };
-
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (file.size > 20 * 1024 * 1024) {
-      toast({ title: 'File terlalu besar', description: 'Maksimal 20MB', variant: 'destructive' });
-      return;
-    }
-
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 
-                          'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    if (!allowedTypes.includes(file.type)) {
-      toast({ title: 'Format tidak didukung', description: 'Hanya PDF, JPG, PNG, DOC, DOCX', variant: 'destructive' });
-      return;
-    }
-
-    setUploadedFile(file);
-    setFilePreview(file.name);
-  };
-
-  const handleRemoveFile = () => {
-    setUploadedFile(null);
-    setFilePreview(null);
   };
 
   // ── 6. Submit → buat leave_proposal ───────────────────────────────────────
@@ -377,21 +348,21 @@ const EmployeeLeaveRequestForm = ({ onSubmit, onCancel, initialData = null }) =>
         }],
       });
       
-      // Store proposal item ID for document upload
+      // Store proposal item ID and save document link
       if (result && result.leave_proposal_items && result.leave_proposal_items.length > 0) {
         const itemId = result.leave_proposal_items[0].id;
         setProposalItemId(itemId);
         
-        // Upload dokumen jika ada file yang dipilih
-        if (uploadedFile) {
-          await uploadDocument(itemId, uploadedFile);
+        // Simpan link dokumen jika ada
+        if (documentLink.trim()) {
+          await saveDocumentLink(itemId);
         }
         
         // Show success toast
         toast({
           title: "Pengajuan Cuti Berhasil Dibuat",
-          description: uploadedFile 
-            ? "Pengajuan cuti berhasil dibuat. Dokumen yang dilampirkan sudah tersimpan."
+          description: documentLink.trim()
+            ? "Pengajuan cuti berhasil dibuat. Link dokumen sudah tersimpan."
             : "Pengajuan cuti berhasil dibuat.",
         });
       }
@@ -608,54 +579,24 @@ const EmployeeLeaveRequestForm = ({ onSubmit, onCancel, initialData = null }) =>
           />
         </div>
         
-        {/* Upload Dokumen Formulir Cuti */}
+        {/* Link Lampiran Dokumen Cuti */}
         <div>
           <Label className="text-slate-300">
-            Lampiran Formulir Cuti
-            <span className="text-xs text-slate-400 block">(Formulir & dokumen pendukung - Opsional)</span>
+            Link Lampiran Dokumen Cuti
+            <span className="text-xs text-slate-400 block">(Google Drive, Dropbox, Cloud Storage, dll. - Opsional)</span>
           </Label>
           <div className="mt-1">
-            <input
-              type="file"
-              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-              onChange={handleFileChange}
-              className="hidden"
-              id="file-upload-employee"
+            <Input
+              type="url"
+              value={documentLink}
+              onChange={(e) => setDocumentLink(e.target.value)}
+              placeholder="Tempel link dokumen di sini (misal: https://drive.google.com/...)"
+              className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
+              disabled={!canSubmit}
             />
-            <div className="rounded-md border border-slate-600 bg-slate-700 p-3 space-y-3">
-              {filePreview ? (
-                <div className="flex items-center justify-between gap-2 rounded bg-slate-600/50 p-2 text-xs text-white">
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <FileText className="h-4 w-4 text-slate-300 flex-shrink-0" />
-                    <span className="truncate">{filePreview}</span>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={handleRemoveFile}
-                    className="h-6 w-6 p-0 text-slate-300 hover:text-white hover:bg-slate-600"
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => document.getElementById('file-upload-employee').click()}
-                  className="w-full bg-slate-600 border-slate-500 text-white hover:bg-slate-500"
-                  disabled={!canSubmit}
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  Pilih File (PDF, JPG, PNG, DOC, DOCX)
-                </Button>
-              )}
-              <p className="text-xs text-slate-400">
-                💡 File akan otomatis diupload ke Google Drive saat pengajuan disimpan
-              </p>
-            </div>
+            <p className="text-xs text-slate-400 mt-1">
+              💡 Tautan dokumen akan disimpan dan dapat diakses langsung oleh verifikator.
+            </p>
           </div>
         </div>
       </div>

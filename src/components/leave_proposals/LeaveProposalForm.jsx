@@ -660,7 +660,7 @@ const LeaveProposalForm = ({ onSubmit, onCancel, initialData = null }) => {
         </Card>
       )}
 
-      {/* ── Upload Dokumen Pendukung ── */}
+      {/* ── Lampiran Dokumen Pendukung ── */}
       {createdProposalItemIds.length > 0 && (
         <Card className="bg-slate-800/50 border-slate-700/50">
           <CardHeader>
@@ -676,8 +676,8 @@ const LeaveProposalForm = ({ onSubmit, onCancel, initialData = null }) => {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="bg-blue-900/20 border border-blue-700/40 rounded p-3 text-xs text-blue-300">
-              💡 Upload dokumen pendukung untuk setiap pengajuan cuti (opsional).
-              Dokumen akan diunggah ke Google Drive dan dapat diakses untuk verifikasi.
+              💡 Lampirkan link dokumen pendukung untuk setiap pengajuan cuti (opsional).
+              Link Google Drive, Dropbox, atau cloud storage lainnya dapat ditempel di sini.
             </div>
 
             {createdProposalItemIds.map((itemId, index) => {
